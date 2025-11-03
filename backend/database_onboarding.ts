@@ -2,6 +2,13 @@ import { v4 as uuidv4 } from 'uuid';
 import * as lancedb from "@lancedb/lancedb";
 import { logger } from './logger';
 
+export async function onboardSettings(connection: lancedb.Connection) {
+    logger.info("Onboarding settings...");
+    const settingsTable = await connection.openTable('settings');
+    await settingsTable.add([{ key: 'object_detection_enabled', value: 'true' }]);
+    logger.info("Default settings added.");
+}
+
 export async function onboardMedia(connection: lancedb.Connection) {
     logger.info("Onboarding media from predefined list...");
 

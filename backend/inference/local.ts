@@ -8,20 +8,15 @@ import { buffersFromPaths, detect_objects, type ModelConfig, postprocess, prepro
 import { MODELS_DIR } from '../appdir';
 import { logger } from '../logger';
 
-const MODEL_FILES = [
-    'd_fine/onnx/model.onnx',
-    'd_fine/config.json',
-    'd_fine/preprocessor_config.json',
-]
+const MODEL_FILES = {
+    'onnx-community/dfine_m_obj2coco-ONNX/onnx/model.onnx': 'https://huggingface.co/onnx-community/dfine_m_obj2coco-ONNX/resolve/main/onnx/model.onnx',
+    'onnx-community/dfine_m_obj2coco-ONNX/config.json': 'https://huggingface.co/onnx-community/dfine_m_obj2coco-ONNX/resolve/main/config.json',
+    'onnx-community/dfine_m_obj2coco-ONNX/preprocessor_config.json': 'https://huggingface.co/onnx-community/dfine_m_obj2coco-ONNX/resolve/main/preprocessor_config.json',
+
+}
 // parent of appConfig.path
 
 logger.info(`Models directory: ${MODELS_DIR}`);
-
-const backend_url = 'https://backend.zapdoslabs.com';
-const models_uri = MODEL_FILES.map(f => ({
-    remote: backend_url + '/api/v1/models' + '/' + f,
-    local: join(MODELS_DIR, f)
-}))
 
 
 async function downloadFile(url: string, dest: string): Promise<void> {
@@ -45,8 +40,11 @@ export async function downloadModelFile() {
         model_downloaded_promise_resolve = resolve;
     });
 
-    for (const uri of models_uri) {
-        const url = uri.remote;
+    for (const [relativePath, url] of Object.entries(MODEL_FILES)) {
+        const uri = {
+            remote: url,
+            local: join(MODELS_DIR, relativePath),
+        };
         const file_path = uri.local;
         if (existsSync(file_path)) continue;
         logger.info(`Downloading model file: ${url}`);
@@ -58,12 +56,14 @@ export async function downloadModelFile() {
 
 export async function loadObjectDetectionModel() {
     await model_downloaded_promise;
-    const MODEL_PATH = join(MODELS_DIR, 'd_fine/onnx/model.onnx');
-    if (!existsSync(MODEL_PATH)) {
-        throw new Error('Model file does not exist. Please run the CLI to download the model files.');
+    const MODEL_PATH = join(MODELS_DIR, 'onnx-community/dfine_m_obj2coco-ONNX/onnx/model.onnx');
+
+    const CONFIG_PATH = join(MODELS_DIR, 'onnx-community/dfine_m_obj2coco-ONNX/config.json');
+    const PREPROCESSOR_CONFIG_PATH = join(MODELS_DIR, 'onnx-community/dfine_m_obj2coco-ONNX/preprocessor_config.json');
+
+    if (!existsSync(MODEL_PATH) || !existsSync(CONFIG_PATH) || !existsSync(PREPROCESSOR_CONFIG_PATH)) {
+        throw new Error("Model files are missing. Make sure to download them first.");
     }
-    const CONFIG_PATH = join(MODELS_DIR, 'd_fine/config.json');
-    const PREPROCESSOR_CONFIG_PATH = join(MODELS_DIR, 'd_fine/preprocessor_config.json');
 
     const configStr = readFileSync(CONFIG_PATH, 'utf-8')
     const modelConfig: ModelConfig = JSON.parse(configStr);

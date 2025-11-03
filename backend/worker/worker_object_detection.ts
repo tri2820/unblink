@@ -46,7 +46,7 @@ async function continuousInferenceLoop() {
     latestImageMap.clear();
 
     try {
-        // logger.info(`Processing ${imagesToProcess.length} unique images for object detection`);
+        logger.info(`Processing ${imagesToProcess.length} unique images for object detection`);
         // const start = Date.now();
         const paths = imagesToProcess.map(item => item.path);
         // const endPrep = Date.now();
@@ -92,6 +92,7 @@ async function continuousInferenceLoop() {
 
 self.addEventListener("message", (event) => {
     const msg: ServerToWorkerObjectDetectionMessage = event.data;
+    console.log('Object detection worker received message for stream:', msg.stream_id);
     if (msg.type === 'frame_file') {
         // Store the latest message for the stream
         latestImageMap.set(msg.stream_id, msg);

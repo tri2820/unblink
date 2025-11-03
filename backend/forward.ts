@@ -6,7 +6,8 @@ import type { WsClient } from "./WsClient";
 export const createForwardFunction = (opts: {
     clients: Map<ServerWebSocket, WsClient>,
     worker_object_detection: () => Worker,
-}) => (msg: MessageEvent) => {
+    settings: () => Record<string, string>,
+}) => async (msg: MessageEvent) => {
     // Broadcast to all clients
     const encoded = msg.data;
     const decoded = decode(encoded) as WorkerToServerMessage;
@@ -19,8 +20,12 @@ export const createForwardFunction = (opts: {
     }
 
     if (decoded.type === 'frame_file') {
+        const isEnabled = opts.settings()['object_detection_enabled'] === 'true';
+
+        if (!isEnabled) return;
+
         const msg: ServerToWorkerObjectDetectionMessage = decoded;
         // Forward to object detection worker
-        // opts.worker_object_detection().postMessage(msg);
+        opts.worker_object_detection().postMessage(msg);
     }
 }

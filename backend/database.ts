@@ -2,7 +2,7 @@ import * as lancedb from "@lancedb/lancedb";
 import * as arrow from "apache-arrow";
 import type { MediaUnit } from "~/shared";
 import { DATABASE_EMBEDDING_DIMENSION, DATABASE_PATH } from "./appdir";
-import { onboardMedia } from "./database_onboarding";
+import { onboardMedia, onboardSettings } from "./database_onboarding";
 /**
  * Initializes the database and creates the table schema.
  */
@@ -43,6 +43,18 @@ export async function initializeDatabase(opts: {
         await onboardMedia(db);
     }
 
+    if (!tableNames.includes('settings')) {
+        const schema = new arrow.Schema([
+            new arrow.Field('key', new arrow.Utf8()),
+            new arrow.Field('value', new arrow.Utf8()),
+        ]);
+        await db.createTable({ name: 'settings', data: [], schema, mode: 'overwrite' });
+        console.log("Table 'settings' created.");
+        await onboardSettings(db);
+    }
+
+
+
     return db;
 }
 
@@ -53,6 +65,7 @@ export const connection = await initializeDatabase({
 
 export const table_media_units = await connection.openTable('media_units');
 export const table_media = await connection.openTable('media');
+export const table_settings = await connection.openTable('settings');
 
 let write_queue: {
     type: 'add' | 'update',

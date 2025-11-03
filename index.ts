@@ -1,21 +1,31 @@
-import { statSync } from "fs";
 import { decode } from "cbor-x";
 import { randomUUID } from "crypto";
 import { RECORDINGS_DIR, RUNTIME_DIR } from "./backend/appdir";
-import { table_media } from "./backend/database";
+import { table_media, table_settings } from "./backend/database";
 import { logger } from "./backend/logger";
+
+let SETTINGS: Record<string, string> = {};
+async function Caches() {
+    const settings_db = await table_settings.query().toArray();
+    for (const setting of settings_db) {
+        SETTINGS[setting.key] = setting.value;
+    }
+    logger.info({ SETTINGS }, "Caches loaded");
+}
+Caches();
+
 
 import type { ServerWebSocket } from "bun";
 import { WsClient } from "./backend/WsClient";
+import { createForwardFunction } from "./backend/forward";
 import { spawn_worker } from "./backend/worker_connect/shared";
-import { start_stream, start_stream_file, start_streams, stop_stream } from "./backend/worker_connect/worker_stream_connector";
+import { start_stream_file, start_streams, stop_stream } from "./backend/worker_connect/worker_stream_connector";
 import homepage from "./index.html";
 import type { ClientToServerMessage, RecordingsResponse } from "./shared";
-import { createForwardFunction } from "./backend/forward";
-import { MediaInput } from "node-av";
 
 
 logger.info(`Using runtime directory: ${RUNTIME_DIR}`);
+
 const server = Bun.serve({
     port: 3000,
     routes: {
@@ -97,6 +107,24 @@ const server = Bun.serve({
                     logger.error({ error }, 'Error fetching recordings');
                     return new Response('Error fetching recordings', { status: 500 });
                 }
+            }
+        },
+        '/settings': {
+            GET: async () => {
+                const settings = await table_settings.query().toArray();
+                return Response.json(settings);
+            },
+            PUT: async (req: Request) => {
+                const body = await req.json();
+                const { key, value } = body;
+                if (!key || value === undefined) {
+                    return new Response('Missing key or value', { status: 400 });
+                }
+                await table_settings.mergeInsert("key")
+                    .whenMatchedUpdateAll()
+                    .execute([{ key, value: value.toString() }]);
+                SETTINGS[key] = value.toString();
+                return Response.json({ success: true });
             }
         },
     },
@@ -218,7 +246,8 @@ logger.info("Server running on http://localhost:3000");
 const clients = new Map<ServerWebSocket, WsClient>();
 const forward = createForwardFunction({
     clients,
-    worker_object_detection: () => worker_object_detection
+    worker_object_detection: () => worker_object_detection,
+    settings: () => SETTINGS,
 })
 
 const worker_stream = spawn_worker('worker_stream.js', forward);
