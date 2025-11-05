@@ -12,9 +12,15 @@ export const createForwardFunction = (opts: {
     settings: () => Record<string, string>,
     engine_conn: () => Conn<ServerToEngine, EngineToServer>,
 }) => {
-    const state = {
-        last_engine_sent: 0,
-    }
+    const state: {
+        streams: {
+            [stream_id: string]: {
+                last_engine_sent: number,
+            }
+        }
+    } = {
+        streams: {},
+    };
 
     return async (msg: MessageEvent) => {
         // Broadcast to all clients
@@ -32,10 +38,15 @@ export const createForwardFunction = (opts: {
             (async () => {
                 const now = Date.now();
                 // Throttle engine forwarding to 1 frame every 5 seconds
-                if (now - state.last_engine_sent < 5000) {
+                if (!state.streams[decoded.stream_id]) {
+                    state.streams[decoded.stream_id] = {
+                        last_engine_sent: 0,
+                    }
+                }
+                if (now - state.streams[decoded.stream_id]!.last_engine_sent < 5000) {
                     return;
                 }
-                state.last_engine_sent = now;
+                state.streams[decoded.stream_id]!.last_engine_sent = now;
 
                 // Store in database
                 addMediaUnit({

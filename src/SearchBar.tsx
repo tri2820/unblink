@@ -9,6 +9,7 @@ import SearchInput from "./search/SearchInput";
 import { usePlaceholder } from "./search/usePlaceholder";
 import { setState } from "./search/utils";
 import { Portal } from "solid-js/web";
+import { setTab } from "./shared";
 
 
 
@@ -72,7 +73,7 @@ export default function SearchBar(props?: { variant?: "md" | "lg" | 'xl', placeh
     function doSubmit(query: string) {
         setIsOpen(false);
         console.log('query', query)
-        // setTabId({ type: "search-result", query });
+        setTab({ type: "search_result", query });
     }
 
     return (

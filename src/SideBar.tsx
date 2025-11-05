@@ -191,7 +191,9 @@ export default function SideBar() {
 
 
             <div class="flex-none mx-4 py-4 space-y-4">
-                <div class="flex items-center transition hover:text-white text-neu-500 hover:cursor-pointer">
+                <div
+                    onClick={() => window.open('https://github.com/tri2820/unblink', '_blank')}
+                    class="flex items-center transition hover:text-white text-neu-500 hover:cursor-pointer">
                     <BsGithub class="w-5 h-5" />
                     <div class="ml-2 ">GitHub</div>
                 </div>

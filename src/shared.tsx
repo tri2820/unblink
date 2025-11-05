@@ -21,13 +21,14 @@ export const [tab, setTab] = createSignal<{
         stream_id: string;
         file_name?: string;
     }[]
+} | {
+    type: 'search_result';
+    query: string;
 }>({ type: 'home' });
 export const [cameras, setCameras] = createSignal<Camera[]>([]);
 export const [camerasLoading, setCamerasLoading] = createSignal(true);
 export const [subscription, setSubscription] = createSignal<Subscription>();
 export const [conn, setConn] = createSignal<Conn<ClientToServerMessage, ServerToClientMessage>>();
-
-
 export const [settings, setSettings] = createSignal<Record<string, string>>({});
 
 export const fetchSettings = async () => {
@@ -91,3 +92,23 @@ export const fetchCameras = async () => {
         setCamerasLoading(false);
     }
 };
+
+export type Card = {
+    created_at: number;
+    stream_id: string;
+    content: string;
+}
+
+export const [agentCards, setAgentCards] = createSignal<Card[]>([]);
+export const relevantAgentCards = () => {
+    const viewedMedias = () => {
+        const t = tab();
+        return t.type === 'view' ? t.medias : [];
+    }
+    const liveStreams = viewedMedias().filter(m => !m.file_name)
+    const cards = agentCards();
+    // newest first
+    const relevant_cards = cards.filter(c => liveStreams.some(media => media.stream_id === c.stream_id)).toSorted((a, b) => b.created_at - a.created_at);
+
+    return relevant_cards;
+}

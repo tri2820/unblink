@@ -25,28 +25,31 @@ export class WsClient {
 
     send(
         msg: ServerToClientMessage,
+        filterBySubscription: boolean = true,
 
     ) {
         if (this.destroyed) return;
+        if (filterBySubscription) {
+            if (!this._subscription) return;
 
-        if (!this._subscription) return;
+            // Check matches subscription before sending
 
-        // Check matches subscription before sending
-
-        if (msg.type === 'codec' || msg.type === 'frame') {
-            const is_subscribed = this._subscription.streams.some(s => {
-                return s.id === msg.stream_id && s.file_name === msg.file_name;
-            });
-            if (!is_subscribed) {
-                // Not subscribed to this stream
-                return;
+            if (msg.type === 'codec' || msg.type === 'frame') {
+                const is_subscribed = this._subscription.streams.some(s => {
+                    return s.id === msg.stream_id && s.file_name === msg.file_name;
+                });
+                if (!is_subscribed) {
+                    // Not subscribed to this stream
+                    return;
+                }
             }
         }
 
-        const encoded = encode({
-            session_id: this._subscription.session_id,
+        const send = {
+            session_id: this._subscription?.session_id,
             ...msg,
-        })
+        }
+        const encoded = encode(send)
 
         this.ws.send(encoded);
     }

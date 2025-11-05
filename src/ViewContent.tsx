@@ -1,6 +1,6 @@
 import { For, Show, createEffect, onCleanup, createSignal } from "solid-js";
 import CanvasVideo from "./CanvasVideo";
-import { cameras, setSubscription, settings, tab, } from "./shared";
+import { agentCards, cameras, relevantAgentCards, setSubscription, settings, tab, } from "./shared";
 import { FaSolidChevronLeft, FaSolidChevronRight, FaSolidObjectGroup } from "solid-icons/fa";
 import ArkSwitch from "./ark/ArkSwitch";
 import { BiSolidChevronLeft } from "solid-icons/bi";
@@ -81,25 +81,6 @@ export default function ViewContent() {
         setSubscription();
     });
 
-    type Card = {
-        created_at: number;
-        stream_id: string;
-        content: string;
-    }
-    const [agentCards, setAgentCards] = createSignal<Card[]>([]);
-    createEffect(() => {
-        const m = newMessage();
-        if (!m) return;
-
-        if (m.type === 'frame_description') {
-            const included = viewedMedias().filter(m => !m.file_name).some(media => media.stream_id === m.stream_id);
-            if (!included) return;
-            setAgentCards(prev => {
-                return [...prev, { created_at: Date.now(), stream_id: m.stream_id, content: m.description }].slice(-200);
-            });
-        }
-    })
-
     const some_media_is_live = () => {
         return viewedMedias().some(media => !media.file_name);
     }
@@ -166,8 +147,8 @@ export default function ViewContent() {
 
                         <Show when={agentBar.showAgentBar()}>
                             <div class="flex-1 p-2 overflow-y-auto space-y-4">
-                                <Show when={agentCards().length > 0} fallback={<div class="text-neu-500">Waiting for VLM responses...</div>}>
-                                    <For each={agentCards()}>
+                                <Show when={relevantAgentCards().length > 0} fallback={<div class="text-neu-500">Waiting for VLM responses...</div>}>
+                                    <For each={relevantAgentCards()}>
                                         {(card) => {
                                             const stream_name = () => {
                                                 const camera = cameras().find(c => c.id === card.stream_id);

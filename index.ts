@@ -62,14 +62,13 @@ const engine_conn = new Conn<ServerToEngine, EngineToServer>(`wss://${ENGINE_URL
                 description: decoded.description,
             })
 
-            // Forward to clients
+            // Forward to clients 
             for (const [id, client] of clients) {
-                client.send(decoded);
+                client.send(decoded, false);
             }
         }
 
         if (decoded.type === 'frame_embedding') {
-            console.log('Received embedding for frame', decoded.frame_id, 'embedding length:', decoded.embedding.length);
             // Store in database
             updateMediaUnit({
                 id: decoded.frame_id,
@@ -114,18 +113,6 @@ const server = Bun.serve({
                 await table_media.delete(`id = '${id}'`);
                 return Response.json({ success: true });
             }
-        },
-        '/media_units/media/:id': {
-            GET: async () => {
-                const media_units = await table_media_units.query().toArray();
-                // @ts-ignore
-                media_units.sort((a, b) => b.at_time.localeCompare(a.at_time));
-                // mask out embedding for response
-                for (const mu of media_units) {
-                    mu.embedding = null;
-                }
-                return Response.json(media_units);
-            },
         },
         '/media': {
             GET: async () => {
@@ -282,11 +269,17 @@ const server = Bun.serve({
 
         // API Proxying
         if (url.pathname.startsWith("/api")) {
-            const targetUrl = new URL(req.url);
-            targetUrl.host = ENGINE_URL;
-            targetUrl.protocol = "https:";
+            // --- FIX START ---
+            // Construct a new URL using the target host and the incoming path.
+            // This avoids carrying over the original request's port.
+            const targetUrl = new URL(url.pathname, `https://${ENGINE_URL}`);
+            targetUrl.search = url.search; // Preserve any query parameters
+            // --- FIX END ---
 
             const headers = new Headers(req.headers);
+            // The "host" header should reflect the target server, not the proxy server.
+            headers.set("host", new URL(`https://${ENGINE_URL}`).host);
+
             // if (appConfig.store.auth_token) {
             //     headers.set("authorization", `Bearer ${appConfig.store.auth_token}`);
             // }
@@ -310,7 +303,6 @@ const server = Bun.serve({
 
         return new Response("Not found", { status: 404 });
     },
-
     development: process.env.NODE_ENV === "development",
 });
 
