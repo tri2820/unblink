@@ -7,7 +7,11 @@ export const [newMessage, setNewMessage] = createSignal<ServerToClientMessage>()
 
 
 export const connectWebSocket = () => {
-    const conn = new Conn<ClientToServerMessage, ServerToClientMessage>(`ws://${location.host}/ws`, {
+    // if localhost, connect to ws://localhost:3000/ws, else wss://your-domain.com/ws
+    const wsUrl = location.hostname === "localhost"
+        ? `ws://${location.host}/ws`
+        : `wss://${location.host}/ws`;
+    const conn = new Conn<ClientToServerMessage, ServerToClientMessage>(wsUrl, {
         onOpen: () => console.log("WebSocket connection opened"),
         onClose: () => console.log("WebSocket connection closed"),
         onError: (e) => console.error("WebSocket connection error:", e),
