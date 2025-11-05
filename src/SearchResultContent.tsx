@@ -1,15 +1,12 @@
-import { FaSolidArrowLeft } from "solid-icons/fa";
-import { createEffect, createSignal, For, Show } from "solid-js";
-
-
+import { createEffect, createSignal, For, Match, Show, Switch } from "solid-js";
 import type { MediaUnit } from "~/shared";
-import IslandRow from "./search/IslandRow";
-import LoadingSkeleton from "./search/LoadingSkeleton";
-import SearchBar from "./SearchBar";
-import { tab } from "./shared";
 import LayoutContent from "./LayoutContent";
+import LoadingSkeleton from "./search/LoadingSkeleton";
+import { cameras, tab } from "./shared";
+import { format } from "date-fns";
+import SearchBar from "./SearchBar";
 
-export type Island = (MediaUnit & { _distance: number })[]
+
 
 // State is updated to include a nullable summary field
 type SearchState = {
@@ -22,7 +19,9 @@ type SearchState = {
 } | {
     type: "result",
     query: string,
-    result: any;
+    result: {
+        media_units: (MediaUnit & { _distance: number })[]
+    }
 }
 
 export default function SearchResultContent() {
@@ -43,11 +42,13 @@ export default function SearchResultContent() {
 
         setSearchState({ type: "searching", query });
         try {
-            // Generate the embedding for the query
-            const response = await fetch(`/api/worker/fast_embedding`, {
+
+            const response = await fetch(`/search`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ query }),
+                body: JSON.stringify({
+                    query
+                }),
             });
 
             if (!response.ok || !response.body) {
@@ -55,7 +56,7 @@ export default function SearchResultContent() {
             }
 
             const data = await response.json();
-            console.log("Embedding results:", data);
+            setSearchState({ type: "result", query, result: data });
 
         } catch (error) {
             console.error("Failed to fetch search results:", error);
@@ -63,10 +64,55 @@ export default function SearchResultContent() {
         }
     });
 
+    // Typescript: guard for search result
+    const searchState_Result = () => {
+        const state = searchState();
+        return state.type === "result" ? state : undefined;
+    }
 
     return <LayoutContent
         title="Search Results"
+        hide_head
     >
+
+        <div class="space-y-2 overflow-y-auto h-full">
+            <div class="relative h-18 mt-4">
+                <SearchBar variant="lg" />
+            </div>
+
+            <Switch>
+                <Match when={searchState().type === "searching"}>
+                    <LoadingSkeleton />
+                </Match>
+                <Match when={searchState().type === "error"}>
+                    <div class="p-4 text-red-500">
+                        An error occurred while searching. Please try again.
+                    </div>
+                </Match>
+                <Match when={searchState_Result()}>
+                    {s => <Show when={s().result.media_units.length > 0} fallback={
+                        <div class="p-4">
+                            No results found for "{s().query}"
+                        </div>
+                    }>
+                        <div class="space-y-2 p-4">
+                            <For each={s().result.media_units}>
+                                {(mu) => {
+                                    const name = () => cameras().find(c => c.id === mu.media_id)?.name || 'Unknown Camera';
+                                    return <div class="animate-push-down p-4 bg-neu-850 rounded-2xl space-y-2">
+                                        <div class="font-semibold">{name()}</div>
+                                        <div class="text-neu-400 text-sm">{format(mu.at_time, 'PPpp')}</div>
+                                        <div>{mu.description}</div>
+                                    </div>
+                                }}
+                            </For>
+                        </div>
+                    </Show>}
+                </Match>
+
+
+            </Switch>
+        </div>
 
     </LayoutContent>
 }

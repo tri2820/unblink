@@ -1,7 +1,7 @@
 import { decode, encode } from "cbor-x";
 import { randomUUID } from "crypto";
 import { RECORDINGS_DIR, RUNTIME_DIR } from "./backend/appdir";
-import { table_media, table_media_units, table_settings, updateMediaUnit } from "./backend/database";
+import { searchMediaUnitsByEmbedding, table_media, table_media_units, table_settings, updateMediaUnit } from "./backend/database";
 import { logger } from "./backend/logger";
 
 import type { ServerWebSocket } from "bun";
@@ -189,6 +189,42 @@ const server = Bun.serve({
                 return Response.json({ success: true });
             }
         },
+        '/search': {
+            POST: async (req: Request) => {
+                const body = await req.json();
+                const { query } = body;
+                if (!query) {
+                    return new Response('Missing query', { status: 400 });
+                }
+
+                // Generate the embedding for the query
+
+                // Forward search request to engine
+                const response = await fetch(`https://${ENGINE_URL}/api/worker/fast_embedding`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        job: {
+                            text: query,
+                            prompt_name: "query"
+                        }
+                    }),
+                });
+
+                if (!response.ok || !response.body) {
+                    throw new Error("Search request failed");
+                }
+
+                const data = await response.json();
+                const embedding: number[] = data.embedding;
+                if (!embedding) {
+                    throw new Error("No embedding returned from engine");
+                }
+
+                const media_units = await searchMediaUnitsByEmbedding(embedding);
+                return Response.json({ media_units });
+            }
+        }
     },
     websocket: {
         open(ws) {
