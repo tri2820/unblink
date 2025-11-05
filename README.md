@@ -18,6 +18,8 @@ Unblink is a camera monitoring application that runs AI vision models on your ca
 - 🤓 Contextual understanding with SmolVLM2
 - 🔎 Intelligent search across your video feeds.
 
+Live demo: [https://app.zapdoslabs.com](https://app.zapdoslabs.com)
+
 ## Getting Started
 
 ### Prerequisites
