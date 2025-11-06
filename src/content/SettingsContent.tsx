@@ -5,10 +5,17 @@ import ArkSwitch from "~/src/ark/ArkSwitch";
 import { saveSettings, settings } from "~/src/shared";
 import LayoutContent from "./LayoutContent";
 import { useAlertsSubTab } from "./settings/useAlertsSubTab";
+import { toaster } from "../ark/ArkToast";
 
 export type UseSubTab = {
     comp: ValidComponent,
-    keys: () => string[]
+    keys: () => {
+        name: string,
+        validate?: (value: string) => {
+            type: 'success' | 'error',
+            message?: string
+        }
+    }[]
 }
 
 export function useMachineLearningSubTab(props: {
@@ -30,7 +37,20 @@ export function useMachineLearningSubTab(props: {
                 </div>
             </div>
         </div>,
-        keys: () => ['object_detection_enabled']
+        keys: () => [{
+            name: 'object_detection_enabled',
+            validate: (value) => {
+                if (value !== 'true' && value !== 'false') {
+                    return {
+                        type: 'error',
+                        message: 'Value must be true or false'
+                    };
+                }
+                return {
+                    type: 'success',
+                };
+            }
+        }]
     }
 }
 
@@ -82,9 +102,19 @@ export default function SettingsContent() {
         if (!ust) return;
         const keys = ust.keys();
         for (const key of keys) {
-            const value = scratchpad()[key];
+            const value = scratchpad()[key.name];
             if (value === undefined) continue;
-            await saveSettings(key, value);
+            if (key.validate) {
+                const validation = key.validate(value);
+                if (validation.type === 'error') {
+                    toaster.error({
+                        title: 'Invalid Value',
+                        description: validation.message || 'Please check your input values.',
+                    });
+                    continue;
+                }
+            }
+            await saveSettings(key.name, value);
         }
     };
 

@@ -116,7 +116,28 @@ export function useAlertsSubTab(props: {
             </div>
         </div>,
         keys: () => [
-            'alerts.webhook_callback_url',
+            {
+                name: 'alerts.webhook_callback_url',
+                validate: (val: string) => {
+                    try {
+                        const url = new URL(val);
+                        if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+                            return {
+                                type: 'error',
+                                message: 'URL must start with http:// or https://'
+                            };
+                        }
+                        return {
+                            type: 'success',
+                        };
+                    } catch {
+                        return {
+                            type: 'error',
+                            message: 'Invalid URL'
+                        }
+                    }
+                },
+            },
         ]
     }
 }
