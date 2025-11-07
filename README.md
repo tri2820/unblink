@@ -39,6 +39,11 @@ bun install
 
 # Start the application
 bun dev
+
+# Or you can build the binary and run that (faster load time & more efficient in production)
+# bun build.ts
+# ./dist/unblink-linux
+
 ```
 
 ### Method 2: Binary executable

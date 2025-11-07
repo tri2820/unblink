@@ -10,7 +10,7 @@ export async function initializeDatabase(opts: {
     databasePath: string; embeddingDimension: number
 
 }): Promise<lancedb.Connection> {
-    console.log(`Initializing database at ${opts.databasePath}...`);
+    console.log(`Connecting to database at ${opts.databasePath}...`);
     const db = await lancedb.connect(opts.databasePath);
     console.log("Connected to database.");
     const tableNames = await db.tableNames();
@@ -55,7 +55,16 @@ export async function initializeDatabase(opts: {
         await onboardSettings(db);
     }
 
-
+    if (!tableNames.includes('users')) {
+        const schema = new arrow.Schema([
+            new arrow.Field('id', new arrow.Utf8()),
+            new arrow.Field('username', new arrow.Utf8()),
+            new arrow.Field('password_hash', new arrow.Utf8()),
+            new arrow.Field('role', new arrow.Utf8()),
+        ]);
+        await db.createTable({ name: 'users', data: [], schema, mode: 'overwrite' });
+        console.log("Table 'users' created.");
+    }
 
     return db;
 }
@@ -68,6 +77,7 @@ export const connection = await initializeDatabase({
 export const table_media_units = await connection.openTable('media_units');
 export const table_media = await connection.openTable('media');
 export const table_settings = await connection.openTable('settings');
+export const table_users = await connection.openTable('users');
 
 let write_queue: {
     type: 'add' | 'update',

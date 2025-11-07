@@ -103,10 +103,7 @@ function EmailToggle() {
 }
 
 
-export function useAlertsSubTab(props: {
-    scratchpad: Accessor<Record<string, string>>,
-    setScratchpad: Setter<Record<string, string>>,
-}): UseSubTab {
+export const useAlertsSubTab: UseSubTab = (props) => {
     return {
         comp: () => <div class="border border-neu-800 rounded-lg bg-neu-850 ">
             <div class="space-y-2 divide-y divide-neu-800">

@@ -1,7 +1,7 @@
 import { decode, encode } from "cbor-x";
 import { randomUUID } from "crypto";
 import { RECORDINGS_DIR, RUNTIME_DIR } from "./backend/appdir";
-import { searchMediaUnitsByEmbedding, table_media, table_media_units, table_settings, updateMediaUnit } from "./backend/database";
+import { searchMediaUnitsByEmbedding, table_media, table_media_units, table_settings, table_users, updateMediaUnit } from "./backend/database";
 import { logger } from "./backend/logger";
 
 import type { ServerWebSocket } from "bun";
@@ -224,6 +224,14 @@ const server = Bun.serve({
                 SETTINGS[key] = value.toString();
                 return Response.json({ success: true });
             }
+        },
+        '/users': {
+            GET: async () => {
+                const users = await table_users.query().toArray();
+                // @ts-ignore
+                const safeUsers = users.map(({ password_hash, ...rest }) => rest);
+                return Response.json(safeUsers);
+            },
         },
         '/search': {
             POST: async (req: Request) => {
