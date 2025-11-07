@@ -19,13 +19,15 @@ Live demo: [https://app.zapdoslabs.com](https://app.zapdoslabs.com)
 
 ## Getting Started
 
-### Prerequisites
+## Installation
+
+### Method 1: Directly from source
+
+
+#### Prerequisites
 
 - [Bun](https://bun.sh) runtime installed on your system
 
-### Installation
-
-#### Method 1: Directly from source
 
 ```bash
 # Clone the repository
@@ -39,7 +41,7 @@ bun install
 bun dev
 ```
 
-#### Method 2: Binary executable
+### Method 2: Binary executable
 
 1. Go to Unblink [release page](https://github.com/tri2820/unblink/releases/latest)
 2. Download the file suitable for your operating system
