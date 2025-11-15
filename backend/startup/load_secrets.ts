@@ -1,11 +1,11 @@
 import { generateSecret } from "../auth";
-import { table_secrets } from "../database";
+import { getAllSecrets, createSecret, setSecret } from "../database/utils";
 import { logger } from "../logger";
 
 export async function load_secrets() {
     // Load secrets into memory
     const SECRETS: Record<string, string> = {};
-    const secrets_db = await table_secrets.query().toArray();
+    const secrets_db = await getAllSecrets();
     for (const secret of secrets_db) {
         SECRETS[secret.key] = secret.value;
     }
@@ -13,7 +13,7 @@ export async function load_secrets() {
 
     if (!SECRETS['jwt_signing_key']) {
         const new_key = generateSecret(64);
-        await table_secrets.add([{ key: 'jwt_signing_key', value: new_key }]);
+        await setSecret('jwt_signing_key', new_key);
         SECRETS['jwt_signing_key'] = new_key;
         logger.info("Generated new JWT signing key");
     }

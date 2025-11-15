@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
-import { table_sessions, table_users } from "./database";
 import type { DbSession, DbUser } from "~/shared";
+import { getSessionById, getUserById as getUserByIdDB } from "./database/utils";
 
 export function generateSecret(length = 64) {
 
@@ -62,12 +62,16 @@ export async function auth_required(settings: () => Record<string, string>, req:
         }
     }
 
-    const session = await table_sessions
-        .query()
-        .where(`session_id = "${session_id}"`)
-        .limit(1)
-        .toArray()
-        .then(s => s.at(0));
+    const session = await getSessionById(session_id);
+    if (!session) return { error: { code: 401, msg: "Invalid or expired session" } };
+
+    // Convert Session numbers to DbSession Dates
+    const dbSession: DbSession = {
+        session_id: session.session_id,
+        user_id: session.user_id,
+        created_at: new Date(session.created_at),
+        expires_at: new Date(session.expires_at)
+    };
 
     if (!session || new Date(session.expires_at) < new Date())
         return {
@@ -77,12 +81,7 @@ export async function auth_required(settings: () => Record<string, string>, req:
             }
         };
 
-    const user = await table_users
-        .query()
-        .where(`id = "${session.user_id}"`)
-        .limit(1)
-        .toArray()
-        .then(u => u.at(0));
+    const user = await getUserByIdDB(session.user_id);
 
     if (!user) return {
         error: {
@@ -94,7 +93,7 @@ export async function auth_required(settings: () => Record<string, string>, req:
     return {
         data: {
             user,
-            session
+            session: dbSession
         }
     };
 

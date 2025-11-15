@@ -4,7 +4,7 @@ import type { EngineToServer, ServerToEngine, ServerToWorkerObjectDetectionMessa
 import type { WsClient } from "./WsClient";
 import type { Conn } from "~/shared/Conn";
 import fs from "fs/promises";
-import { addMediaUnit, table_media_units } from "./database";
+import { createMediaUnit, getMediaUnitsByMediaId } from "./database/utils";
 import type { WebhookMessage } from "~/shared/alert";
 
 export const createForwardFunction = (opts: {
@@ -65,10 +65,10 @@ export const createForwardFunction = (opts: {
                 state.streams[decoded.stream_id]!.last_engine_sent = now;
 
                 // Store in database
-                addMediaUnit({
+                await createMediaUnit({
                     id: decoded.frame_id,
                     type: 'frame',
-                    at_time: new Date(),
+                    at_time: Date.now(), // Using timestamp instead of Date object
                     description: null,
                     embedding: null,
                     media_id: decoded.stream_id,

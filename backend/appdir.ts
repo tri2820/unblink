@@ -15,7 +15,7 @@ export const RUNTIME_DIR = path.join(appdir(), APP_NAME);
 export const MODELS_DIR = path.join(RUNTIME_DIR, 'models');
 
 
-export const DATABASE_PATH = path.join(RUNTIME_DIR, 'database');
+export const DATABASE_FILE_PATH = path.join(RUNTIME_DIR, 'database');
 export const DATABASE_EMBEDDING_DIMENSION = 2048;
 export const FILES_DIR = path.join(RUNTIME_DIR, 'files');
 export const FRAMES_DIR = path.join(FILES_DIR, 'frames');
@@ -25,6 +25,5 @@ export const RECORDINGS_DIR = path.join(FILES_DIR, 'recordings');
 await ensureDirExists(RUNTIME_DIR);
 await ensureDirExists(MODELS_DIR);
 await ensureDirExists(FILES_DIR);
-await ensureDirExists(DATABASE_PATH);
 await ensureDirExists(FRAMES_DIR);
 await ensureDirExists(RECORDINGS_DIR);

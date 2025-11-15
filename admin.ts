@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import { createInterface } from 'node:readline/promises';
 import { RUNTIME_DIR } from './backend/appdir';
 import { hashPassword } from './backend/auth';
-import { table_secrets, table_settings, table_users } from './backend/database';
+import { getAllSecrets, getSecret, setSecret as setSecretDB, getAllSettings, getSetting as getSettingDB, setSetting as setSettingDB, deleteUser as deleteExistingUser, getAllUsers, getUserByUsername, getUserById, createUser, updateUser as updateUserDB, updateUser as updateExistingUser } from './backend/database/utils';
 import { v4 as uuid } from 'uuid';
 
 const rl = createInterface({
@@ -66,8 +66,8 @@ async function addUser() {
     const username = (await rl.question('Enter username: ')).trim();
     if (!username) throw new Error('Username cannot be empty.');
 
-    const existingUser = await table_users.query().where(`username = '${username}'`).limit(1).toArray();
-    if (existingUser.length > 0) throw new Error(`User '${username}' already exists.`);
+    const existingUser = await getUserByUsername(username);
+    if (existingUser) throw new Error(`User '${username}' already exists.`);
 
     const password = (await rl.question('Enter password: ')).trim();
     if (!password) throw new Error('Password cannot be empty.');
@@ -82,7 +82,7 @@ async function addUser() {
 
     const argonHash = await hashPassword(password);
     const id = uuid();
-    await table_users.add([{ id, username, password_hash: argonHash, role }]);
+    await createUser({ id, username, password_hash: argonHash, role });
     console.log(`New user '${username}' created successfully with role '${role}'.`);
 }
 
@@ -90,16 +90,14 @@ async function updateUser() {
     const username = (await rl.question('Enter username: ')).trim();
     if (!username) throw new Error('Username cannot be empty.');
 
-    const existingUser = await table_users.query().where(`username = '${username}'`).limit(1).toArray();
-    if (existingUser.length === 0) throw new Error(`User '${username}' not found.`);
+    const existingUser = await getUserByUsername(username);
+    if (!existingUser) throw new Error(`User '${username}' not found.`);
 
     const password = (await rl.question('Enter new password: ')).trim();
     if (!password) throw new Error('Password cannot be empty.');
 
     const argonHash = await hashPassword(password);
-    await table_users.mergeInsert("username")
-        .whenMatchedUpdateAll()
-        .execute([{ username, password_hash: argonHash }]);
+    await updateUserDB(existingUser.id, { password_hash: argonHash });
     console.log(`Password for user '${username}' has been updated successfully.`);
 }
 
@@ -107,8 +105,8 @@ async function deleteUser() {
     const username = (await rl.question('Enter username to delete: ')).trim();
     if (!username) throw new Error('Username cannot be empty.');
 
-    const existingUser = await table_users.query().where(`username = '${username}'`).limit(1).toArray();
-    if (existingUser.length === 0) throw new Error(`User '${username}' not found.`);
+    const existingUser = await getUserByUsername(username);
+    if (!existingUser) throw new Error(`User '${username}' not found.`);
 
     const confirmation = (await rl.question(`Are you sure you want to delete user '${username}'? (yes/no): `)).trim().toLowerCase();
     if (confirmation !== 'yes') {
@@ -116,19 +114,18 @@ async function deleteUser() {
         return;
     }
 
-    await table_users.delete(`username = '${username}'`);
+    await deleteExistingUser(existingUser.id);
     console.log(`User '${username}' has been deleted.`);
 }
 
 async function listUsers() {
-    const users = await table_users.query().toArray();
+    const users = await getAllUsers();
     if (users.length === 0) {
         console.log("No users found.");
         return;
     }
     console.log("Users:");
     users.forEach(user => {
-        // @ts-ignore
         console.log(`  - Username: ${user.username}, Role: ${user.role}`);
     });
 }
@@ -138,22 +135,20 @@ async function listUsers() {
 async function listSettings(args: string[]) {
     const key = args[2];
     if (key) {
-        const setting = await table_settings.query().where(`key = '${key}'`).limit(1).toArray();
-        if (setting.length === 0) {
+        const setting = await getSettingDB(key);
+        if (!setting) {
             console.log(`Setting with key '${key}' not found.`);
         } else {
-            // @ts-ignore
-            console.log(`${setting[0].key}: ${setting[0].value}`);
+            console.log(`${setting.key}: ${setting.value}`);
         }
     } else {
-        const settings = await table_settings.query().toArray();
+        const settings = await getAllSettings();
         if (settings.length === 0) {
             console.log("No settings found.");
             return;
         }
         console.log("Settings:");
         settings.forEach(setting => {
-            // @ts-ignore
             console.log(`  - ${setting.key}: ${setting.value}`);
         });
     }
@@ -167,10 +162,7 @@ async function modifySetting(args: string[]) {
         throw new Error("Usage: settings modify <key> <value>");
     }
 
-    await table_settings.mergeInsert("key")
-        .whenMatchedUpdateAll()
-        .whenNotMatchedInsertAll()
-        .execute([{ key, value: value.toString() }]);
+    await setSettingDB(key, value.toString());
 
     console.log(`Setting '${key}' has been set to '${value}'.`);
 }
@@ -180,22 +172,20 @@ async function modifySetting(args: string[]) {
 async function listSecrets(args: string[]) {
     const key = args[2];
     if (key) {
-        const secret = await table_secrets.query().where(`key = '${key}'`).limit(1).toArray();
-        if (secret.length === 0) {
+        const secret = await getSecret(key);
+        if (!secret) {
             console.log(`Secret with key '${key}' not found.`);
         } else {
-            // @ts-ignore
-            console.log(`${secret[0].key}: ${secret[0].value}`);
+            console.log(`${secret.key}: ${secret.value}`);
         }
     } else {
-        const secrets = await table_secrets.query().toArray();
+        const secrets = await getAllSecrets();
         if (secrets.length === 0) {
             console.log("No secrets found.");
             return;
         }
         console.log("Secret keys:");
         secrets.forEach(secret => {
-            // @ts-ignore
             console.log(`  - ${secret.key}`);
         });
     }
@@ -209,10 +199,7 @@ async function modifySecret(args: string[]) {
         throw new Error("Usage: secrets modify <key> <value>");
     }
 
-    await table_secrets.mergeInsert("key")
-        .whenMatchedUpdateAll()
-        .whenNotMatchedInsertAll()
-        .execute([{ key, value: value.toString() }]);
+    await setSecretDB(key, value.toString());
 
     console.log(`Secret '${key}' has been set.`);
 }

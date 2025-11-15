@@ -5,7 +5,7 @@ import { admin } from "./admin";
 import { WsClient } from "./backend/WsClient";
 import { RECORDINGS_DIR, RUNTIME_DIR } from "./backend/appdir";
 import { auth_required, verifyPassword } from "./backend/auth";
-import { searchMediaUnitsByEmbedding, table_media, table_sessions, table_settings, table_users } from "./backend/database";
+import { getMediaUnitsByEmbedding, getAllMedia, getMediaById, createMedia, updateMedia, deleteMedia, getAllSessions, getSessionById, createSession, updateSession, deleteSession, getAllSettings as getAllSettingsDB, getSetting as getSettingDB, setSetting as setSettingDB, getAllUsers, getUserById as getUserByIdDB, getUserByUsername as getUserByUsernameDB, createUser as createUserDB, updateUser as updateUserDB, deleteUser as deleteUserDB } from "./backend/database/utils";
 import { createForwardFunction } from "./backend/forward";
 import { logger } from "./backend/logger";
 import { check_version } from "./backend/startup/check_version";
@@ -61,12 +61,7 @@ const server = Bun.serve({
                     return new Response("Missing username or password", { status: 400 });
                 }
 
-                const user: DbUser | undefined = await table_users
-                    .query()
-                    .where(`username = "${username}"`)
-                    .limit(1)
-                    .toArray()
-                    .then(users => users.at(0));
+                const user: DbUser | undefined = await getUserByUsernameDB(username);
 
                 if (!user) return new Response("Invalid username or password", { status: 401 });
 
@@ -77,7 +72,7 @@ const server = Bun.serve({
                 const created_at = new Date();
                 const expires_at = new Date(created_at.getTime() + SESSION_DURATION_HOURS * 60 * 60 * 1000);
 
-                await table_sessions.add([{ session_id, user_id: user.id, created_at, expires_at }]);
+                await createSession({ session_id, user_id: user.id, created_at: created_at.getTime(), expires_at: expires_at.getTime() });
 
                 const res = Response.json({ message: "Login successful" });
                 const DANGEROUS_DISABLE_SECURE_COOKIE = process.env.DANGEROUS_DISABLE_SECURE_COOKIE === 'true';
@@ -99,7 +94,7 @@ const server = Bun.serve({
 
                 if (!session_id) return new Response("Missing session_id", { status: 400 });
 
-                await table_sessions.delete(`session_id = '${session_id}'`);
+                await deleteSession(session_id);
 
                 const res = new Response("Logged out successfully", { status: 200 });
                 let cookie = "session_id=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0;";
@@ -145,21 +140,18 @@ const server = Bun.serve({
                     return new Response('Missing name or uri', { status: 400 });
                 }
                 const updated_at = new Date();
-                await table_media.mergeInsert("id")
-                    .whenMatchedUpdateAll()
-                    .execute([{ id, name, uri, labels: labels ?? [], updated_at, saveToDisk: saveToDisk ?? false, saveDir: saveDir ?? '' }]);
+                await updateMedia(id, { name, uri, labels: labels ?? [], saveToDisk: saveToDisk ? 1 : 0, saveDir: saveDir ?? '' });
                 return Response.json({ success: true });
             },
             DELETE: async ({ params }: { params: { id: string } }) => {
                 const { id } = params;
-                await table_media.delete(`id = "${id}"`);
+                await deleteMedia(id);
                 return Response.json({ success: true });
             }
         },
         '/media': {
             GET: async () => {
-                const media = await table_media.query().toArray();
-                // @ts-ignore
+                const media = await getAllMedia();
                 media.sort((a, b) => b.updated_at - a.updated_at);
                 return Response.json(media);
             },
@@ -175,8 +167,7 @@ const server = Bun.serve({
                     return new Response('Missing name or uri', { status: 400 });
                 }
                 const id = uuid();
-                const updated_at = new Date();
-                await table_media.add([{ id, name, uri, labels: labels ?? [], updated_at, saveToDisk: saveToDisk ?? false, saveDir: saveDir ?? '' }]);
+                await createMedia({ id, name, uri, labels: labels ?? [], updated_at: Date.now(), saveToDisk: saveToDisk ? 1 : 0, saveDir: saveDir ?? '' });
 
                 logger.info(`New media added via API: ${name} (${id})`);
                 // Start the media stream
@@ -230,7 +221,7 @@ const server = Bun.serve({
         },
         '/settings': {
             GET: async (req) => {
-                const settings = await table_settings.query().toArray();
+                const settings = await getAllSettingsDB();
                 return Response.json(settings);
             },
             PUT: async (req: Request) => {
@@ -245,13 +236,9 @@ const server = Bun.serve({
                     return new Response('Missing or invalid entries', { status: 400 });
                 }
 
-                await table_settings.mergeInsert("key")
-                    .whenMatchedUpdateAll()
-                    .whenNotMatchedInsertAll()
-                    .execute(entries);
-
                 for (const entry of entries) {
                     const { key, value } = entry;
+                    await setSettingDB(key, value.toString());
                     setSettings(key, value.toString());
                     logger.info(`Setting updated: ${key} = ${value}`);
                 }
@@ -261,8 +248,7 @@ const server = Bun.serve({
         },
         '/users': {
             GET: async () => {
-                const users = await table_users.query().toArray();
-                // @ts-ignore
+                const users = await getAllUsers();
                 const safeUsers = users.map(({ password_hash, ...rest }) => rest);
                 return Response.json(safeUsers);
             },
@@ -299,7 +285,7 @@ const server = Bun.serve({
                     throw new Error("No embedding returned from engine");
                 }
 
-                const media_units = await searchMediaUnitsByEmbedding(embedding);
+                const media_units = await getMediaUnitsByEmbedding(embedding);
                 return Response.json({ media_units });
             }
         }

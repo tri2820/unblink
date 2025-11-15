@@ -1,7 +1,7 @@
 import type { EngineToServer, ServerToEngine } from "~/shared";
 import { Conn } from "~/shared/Conn";
 import { logger } from "../logger";
-import { updateMediaUnit } from "../database";
+import { updateMediaUnit } from "../database/utils";
 import type { WebhookMessage } from "~/shared/alert";
 import type { ServerWebSocket } from "bun";
 import type { WsClient } from "../WsClient";
@@ -27,8 +27,8 @@ export function connect_to_engine(props: {
         onMessage(decoded) {
             if (decoded.type === 'frame_description') {
                 // Store in database
-                updateMediaUnit({
-                    id: decoded.frame_id,
+                // logger.info(`Received description for frame ${decoded.frame_id}: ${decoded.description}`);
+                updateMediaUnit(decoded.frame_id, {
                     description: decoded.description,
                 })
 
@@ -50,10 +50,12 @@ export function connect_to_engine(props: {
             }
 
             if (decoded.type === 'frame_embedding') {
+                // Convert number[] to Uint8Array for database storage
+                const embeddingBuffer = decoded.embedding ? new Uint8Array(new Float32Array(decoded.embedding).buffer) : null;
+
                 // Store in database
-                updateMediaUnit({
-                    id: decoded.frame_id,
-                    embedding: decoded.embedding,
+                updateMediaUnit(decoded.frame_id, {
+                    embedding: embeddingBuffer,
                 })
             }
         }
