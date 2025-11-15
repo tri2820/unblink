@@ -18,8 +18,6 @@ export interface Setting {
     value: string;
 }
 
-
-
 export interface MediaUnit {
     id: string;
     media_id: string;

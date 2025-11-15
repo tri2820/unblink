@@ -5,7 +5,7 @@ import { admin } from "./admin";
 import { WsClient } from "./backend/WsClient";
 import { RECORDINGS_DIR, RUNTIME_DIR } from "./backend/appdir";
 import { auth_required, verifyPassword } from "./backend/auth";
-import { getMediaUnitsByEmbedding, getAllMedia, getMediaById, createMedia, updateMedia, deleteMedia, getAllSessions, getSessionById, createSession, updateSession, deleteSession, getAllSettings as getAllSettingsDB, getSetting as getSettingDB, setSetting as setSettingDB, getAllUsers, getUserById as getUserByIdDB, getUserByUsername as getUserByUsernameDB, createUser as createUserDB, updateUser as updateUserDB, deleteUser as deleteUserDB } from "./backend/database/utils";
+import { createMedia, createSession, deleteMedia, deleteSession, getAllMedia, getAllSettings as getAllSettingsDB, getAllUsers, getByQuery, getMediaUnitsByEmbedding, getUserByUsername as getUserByUsernameDB, setSetting as setSettingDB, updateMedia } from "./backend/database/utils";
 import { createForwardFunction } from "./backend/forward";
 import { logger } from "./backend/logger";
 import { check_version } from "./backend/startup/check_version";
@@ -16,7 +16,7 @@ import { create_webhook_forward } from "./backend/webhook";
 import { spawn_worker } from "./backend/worker_connect/shared";
 import { start_stream, start_stream_file, start_streams, stop_stream } from "./backend/worker_connect/worker_stream_connector";
 import homepage from "./index.html";
-import type { ClientToServerMessage, DbUser, RecordingsResponse } from "./shared";
+import type { ClientToServerMessage, DbUser, RecordingsResponse, RESTQuery } from "./shared";
 
 // Check args for "admin" mode
 if (process.argv[2] === "admin") {
@@ -181,6 +181,24 @@ const server = Bun.serve({
 
                 return Response.json({ success: true, id });
             },
+        },
+        '/query': {
+            POST: async (req: Request) => {
+                // Only media_units table is supported for now
+                const body = await req.json();
+
+                if (!body.query) {
+                    return new Response('Missing query', { status: 400 });
+                }
+
+                const query: RESTQuery = body.query;
+                if (query.table !== 'media_units') {
+                    return new Response('Invalid table in query', { status: 400 });
+                }
+
+                const media_units = await getByQuery(query);
+                return Response.json({ media_units });
+            }
         },
         '/recordings': {
             GET: async () => {

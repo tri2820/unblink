@@ -143,3 +143,13 @@ export type DbSession = {
     created_at: Date;
     expires_at: Date;
 };
+
+export type RESTQuery = {
+    table: string;
+    where?: {
+        field: string;
+        op: 'equals' | 'in' | 'is_not' | 'like';
+        value: any;
+    }[]
+
+}

@@ -1,6 +1,7 @@
 import type { Database } from '@tursodatabase/database';
 import { getDb } from './database';
 import type { Media, MediaUnit, Secret, Session, Setting, User } from './init';
+import type { RESTQuery } from '~/shared';
 
 
 // Media utilities
@@ -402,5 +403,47 @@ export async function getMediaUnitsByEmbedding(queryEmbedding: number[]): Promis
 
     // Execute the query and return results
     const rows = await stmt.all();
+    return rows;
+}
+
+export async function getByQuery(query: RESTQuery): Promise<MediaUnit[]> {
+    const db = await getDb();
+
+    let sql = `SELECT * FROM ${query.table}`;
+    const conditions: string[] = [];
+    const values: any[] = [];
+
+    if (query.where && query.where.length > 0) {
+        for (const condition of query.where) {
+            switch (condition.op) {
+                case 'equals':
+                    conditions.push(`${condition.field} = ?`);
+                    values.push(condition.value);
+                    break;
+                case 'in':
+                    const placeholders = (condition.value as any[]).map(() => '?').join(', ');
+                    conditions.push(`${condition.field} IN (${placeholders})`);
+                    values.push(...(condition.value as any[]));
+                    break;
+                case 'is_not':
+                    conditions.push(`${condition.field} IS NOT ?`);
+                    values.push(condition.value);
+                    break;
+                case 'like':
+                    conditions.push(`${condition.field} LIKE ?`);
+                    values.push(condition.value);
+                    break;
+                default:
+                    throw new Error(`Unsupported operation: ${condition.op}`);
+            }
+        }
+    }
+
+    if (conditions.length > 0) {
+        sql += ' WHERE ' + conditions.join(' AND ');
+    }
+
+    const stmt = db.prepare(sql);
+    const rows = await stmt.all(...values) as MediaUnit[];
     return rows;
 }

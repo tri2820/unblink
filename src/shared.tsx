@@ -75,13 +75,13 @@ export const fetchCameras = async () => {
     }
 };
 
-export type Card = {
+export type AgentCard = {
     created_at: number;
     stream_id: string;
     content: string;
 }
 
-export const [agentCards, setAgentCards] = createSignal<Card[]>([]);
+export const [agentCards, setAgentCards] = createSignal<AgentCard[]>([]);
 export const relevantAgentCards = () => {
     const viewedMedias = () => {
         const t = tab();

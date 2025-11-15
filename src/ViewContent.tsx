@@ -3,8 +3,9 @@ import { FaSolidChevronLeft, FaSolidChevronRight } from "solid-icons/fa";
 import { For, Show, createEffect, createSignal, onCleanup } from "solid-js";
 import ArkSwitch from "./ark/ArkSwitch";
 import CanvasVideo from "./CanvasVideo";
-import { cameras, relevantAgentCards, setSubscription, settings, tab } from "./shared";
+import { cameras, relevantAgentCards, setAgentCards, setSubscription, settings, subscription, tab, type AgentCard } from "./shared";
 import { v4 as uuid } from 'uuid';
+import type { MediaUnit, RESTQuery } from "~/shared";
 
 const GAP_SIZE = '8px';
 
@@ -64,6 +65,48 @@ export default function ViewContent() {
             setSubscription();
         }
     });
+
+    createEffect(async () => {
+        // Get relevant media units for those streams
+        const medias = viewedMedias();
+        setAgentCards([]); // Clear agent cards when viewed medias change   
+        if (!medias || medias.length === 0) {
+            return;
+        }
+
+        console.log('Viewing medias changed, current medias:', medias);
+
+        const resp = await fetch('/query', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                query: {
+                    table: 'media_units',
+                    where: [{
+                        'field': 'media_id', 'op': 'in', 'value': medias.map(m => m.stream_id),
+                    }, {
+                        'field': 'embedding', 'op': 'is_not', 'value': null
+                    }]
+                } as RESTQuery,
+            }),
+        });
+
+        if (resp.ok) {
+            const data = await resp.json() as { media_units: MediaUnit[] };
+            const cards: AgentCard[] = data.media_units.map(mu => ({
+                created_at: new Date(mu.at_time).getTime(),
+                stream_id: mu.media_id,
+                content: mu.description || '',
+            }));
+            setAgentCards(cards);
+
+            console.log('Fetched media units for viewed medias:', data);
+        } else {
+            console.error('Failed to fetch media units for viewed medias');
+        }
+    })
 
     const cols = () => {
 
