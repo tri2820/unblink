@@ -99,5 +99,20 @@ export async function initDatabase(client: Database) {
         `);
         logger.info("Table 'users' created.");
     }
+
+    // Create 'moments' table
+    if (!existingTables.has('moments')) {
+        await client.exec(`
+            CREATE TABLE moments (
+                id TEXT PRIMARY KEY,
+                from_time INTEGER NOT NULL,
+                to_time INTEGER NOT NULL,
+                media_unit_ids TEXT NOT NULL,
+                summary TEXT,
+                importance_score REAL
+            );
+        `);
+        logger.info("Table 'moments' created.");
+    }
 }
 

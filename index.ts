@@ -470,7 +470,6 @@ const forward = createForwardFunction({
 })
 
 const worker_stream = await spawn_worker('worker_stream.js', forward);
-// const worker_object_detection = spawn_worker('worker_object_detection.js', forward);
 
 if (process.env.DEV_MODE === 'lite') {
     logger.info("Running in lite development mode - skipping stream startup");

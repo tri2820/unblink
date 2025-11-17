@@ -1,12 +1,12 @@
 import type { ServerWebSocket } from "bun";
 
+import type { ServerToClientMessage } from "~/shared";
 import type { WebhookMessage } from "~/shared/alert";
 import { Conn } from "~/shared/Conn";
+import type { EngineToServer, ServerToEngine } from "~/shared/engine";
 import { getMediaUnitById, updateMediaUnit } from "../database/utils";
 import { logger } from "../logger";
 import type { WsClient } from "../WsClient";
-import type { EngineToServer, ServerToEngine } from "~/shared/engine";
-import type { ServerToClientMessage } from "~/shared";
 
 export function connect_to_engine(props: {
     ENGINE_URL: string,
@@ -27,6 +27,11 @@ export function connect_to_engine(props: {
             logger.error(event, "WebSocket to engine error:");
         },
         async onMessage(decoded) {
+            if (decoded.type === 'media_summary') {
+                // Handle media summary
+                logger.info({ decoded }, `Received media summary`);
+                return;
+            }
 
             if (decoded.type === 'frame_description') {
                 // Store in database

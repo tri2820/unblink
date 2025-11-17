@@ -7,6 +7,7 @@ import { cameras, relevantAgentCards, setAgentCards, setSubscription, settings, 
 import { v4 as uuid } from 'uuid';
 import type { RESTQuery } from "~/shared";
 import type { MediaUnit } from "~/shared/database";
+import LoadingSkeleton from "./search/LoadingSkeleton";
 
 const GAP_SIZE = '8px';
 
@@ -185,7 +186,9 @@ export default function ViewContent() {
 
                         <Show when={agentBar.showAgentBar()}>
                             <div class="flex-1 p-2 overflow-y-auto space-y-4">
-                                <Show when={relevantAgentCards().length > 0} fallback={<div class="text-neu-500">Waiting for VLM responses...</div>}>
+                                <Show when={relevantAgentCards().length > 0} fallback={
+                                    <LoadingSkeleton />
+                                }>
                                     <For each={relevantAgentCards()}>
                                         {(card) => {
                                             const stream_name = () => {

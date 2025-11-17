@@ -64,21 +64,23 @@ export const createForwardFunction = (opts: {
                 }
             }
 
+            // Store in database
+            const mu = {
+                id: decoded.frame_id,
+                type: 'frame',
+                at_time: Date.now(), // Using timestamp instead of Date object
+                description: null,
+                embedding: null,
+                media_id: decoded.stream_id,
+                path: decoded.path,
+            };
+
             (async () => {
                 // Throttle engine forwarding to 1 frame every 5 seconds
                 if (now - state.streams[decoded.stream_id]!.last_engine_sent__index < 5000) return;
                 state.streams[decoded.stream_id]!.last_engine_sent__index = now;
 
-                // Store in database
-                await createMediaUnit({
-                    id: decoded.frame_id,
-                    type: 'frame',
-                    at_time: Date.now(), // Using timestamp instead of Date object
-                    description: null,
-                    embedding: null,
-                    media_id: decoded.stream_id,
-                    path: decoded.path,
-                })
+                await createMediaUnit(mu)
 
                 // Forward to AI engine for 
                 // 1. Compute embedding  
@@ -96,6 +98,7 @@ export const createForwardFunction = (opts: {
                     stream_id: decoded.stream_id,
                     frame_id: decoded.frame_id,
                     frame,
+                    at_time: mu.at_time,
                 }
                 engine_conn.send(msg);
             })();
@@ -117,6 +120,7 @@ export const createForwardFunction = (opts: {
                     stream_id: decoded.stream_id,
                     frame_id: decoded.frame_id,
                     frame: await fs.readFile(decoded.path),
+                    at_time: mu.at_time,
                 }
                 opts.engine_conn().send(msg);
             })();

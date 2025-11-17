@@ -137,7 +137,7 @@ export default function SideBar() {
         <div class="bg-neu-900 h-full rounded-2xl border border-neu-800 flex flex-col drop-shadow-2xl">
 
             {/* Head */}
-            <div class="mt-4 flex items-center space-x-3 mx-4 mb-8 h-20">
+            <div class="mt-4 flex items-center space-x-3 mx-4 mb-8">
                 <img src={logoSVG} class="w-18 h-18" />
                 <div class="flex-1 font-nunito font-medium text-white text-3xl mt-2 leading-none">
                     Unblink

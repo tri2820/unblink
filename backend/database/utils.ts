@@ -447,3 +447,15 @@ export async function getByQuery(query: RESTQuery): Promise<MediaUnit[]> {
     const rows = await stmt.all(...values) as MediaUnit[];
     return rows;
 }
+
+export async function getMediaUnitsByIds(ids: string[]): Promise<MediaUnit[]> {
+    if (ids.length === 0) return [];
+    const db = await getDb();
+
+    const placeholders = ids.map(() => '?').join(', ');
+    const sql = `SELECT * FROM media_units WHERE id IN (${placeholders})`;
+
+    const stmt = db.prepare(sql);
+    const rows = await stmt.all(...ids) as MediaUnit[];
+    return rows;
+}

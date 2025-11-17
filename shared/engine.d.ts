@@ -13,8 +13,8 @@ export type ServerToEngine =
         frame_id: string;
         stream_id: string;
         frame: Uint8Array;
+        at_time: number;
     }
-
 
 export type DetectionObject = {
     label: string;
@@ -42,6 +42,10 @@ export type EngineToServer = {
     stream_id: string;
     frame_id: string;
     objects: DetectionObject[];
+} | {
+    type: "media_summary",
+    media_id: string;
+    summary: string;
 }
 
 export type EngineReceivedMessage = ServerToEngine | WorkerToEngine;
