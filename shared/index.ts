@@ -131,6 +131,10 @@ export type RESTQuery = {
     }[];
     select?: string[];
     limit?: number;
+    order_by?: {
+        field: string;
+        direction: 'ASC' | 'DESC';
+    };
 }
 
 export type ServerEphemeralState = {

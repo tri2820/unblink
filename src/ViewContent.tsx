@@ -93,7 +93,8 @@ export default function ViewContent() {
                         'field': 'description', 'op': 'is_not', 'value': null
                     }],
                     select: ['id', 'media_id', 'at_time', 'description', 'path', 'type'],
-                    limit: 20
+                    limit: 20,
+                    order_by: { field: 'at_time', direction: 'DESC' }
                 } as RESTQuery,
             }),
         });

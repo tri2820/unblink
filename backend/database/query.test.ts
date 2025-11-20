@@ -21,13 +21,14 @@ beforeAll(async () => {
     });
 
     // Create 60 items to test default limit (50) and explicit limits
+    const baseTime = Date.now();
     for (let i = 0; i < 60; i++) {
         const id = crypto.randomUUID();
         createdMediaUnitIds.push(id);
         await createMediaUnit({
             id,
             media_id: testMediaId,
-            at_time: Date.now(),
+            at_time: baseTime + (i * 1000), // Sequential timestamps, 1 second apart
             description: `Query Test Item ${i}`,
             path: `/tmp/query_test_${i}.jpg`,
             type: 'image'
@@ -97,4 +98,61 @@ test("getByQuery - Select specific fields", async () => {
     // We want to ensure 'path' is NOT in the returned object keys if we didn't select it.
     // Note: better-sqlite3 returns objects with only selected columns.
     expect(Object.keys(item as object)).not.toContain('path');
+});
+
+test("getByQuery - Order by at_time DESC", async () => {
+    const results = await getByQuery({
+        table: 'media_units',
+        where: [{ field: 'media_id', op: 'equals', value: testMediaId }],
+        limit: 10,
+        order_by: { field: 'at_time', direction: 'DESC' }
+    });
+
+    expect(results.length).toBe(10);
+    // Verify descending order
+    for (let i = 0; i < results.length - 1; i++) {
+        expect(results[i]!.at_time).toBeGreaterThanOrEqual(results[i + 1]!.at_time);
+    }
+});
+
+test("getByQuery - Order by description ASC", async () => {
+    const results = await getByQuery({
+        table: 'media_units',
+        where: [{ field: 'media_id', op: 'equals', value: testMediaId }],
+        limit: 10,
+        order_by: { field: 'description', direction: 'ASC' }
+    });
+
+    expect(results.length).toBe(10);
+    // Verify ascending order - description follows pattern "Query Test Item N"
+    // Just verify the order is maintained
+    for (let i = 0; i < results.length - 1; i++) {
+        const current = results[i]!.description || '';
+        const next = results[i + 1]!.description || '';
+        expect(current.localeCompare(next)).toBeLessThanOrEqual(0);
+    }
+});
+
+test("getByQuery - Order by with select fields", async () => {
+    const results = await getByQuery({
+        table: 'media_units',
+        where: [{ field: 'media_id', op: 'equals', value: testMediaId }],
+        limit: 5,
+        select: ['id', 'at_time', 'description'],
+        order_by: { field: 'at_time', direction: 'ASC' }
+    });
+
+    expect(results.length).toBe(5);
+    // Verify selected fields only
+    const item = results[0];
+    expect(item).toBeDefined();
+    expect(item).toHaveProperty('id');
+    expect(item).toHaveProperty('at_time');
+    expect(item).toHaveProperty('description');
+    expect(Object.keys(item as object)).not.toContain('path');
+
+    // Verify ascending order
+    for (let i = 0; i < results.length - 1; i++) {
+        expect(results[i]!.at_time).toBeLessThanOrEqual(results[i + 1]!.at_time);
+    }
 });

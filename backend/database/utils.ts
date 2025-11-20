@@ -448,6 +448,10 @@ export async function getByQuery(query: RESTQuery): Promise<MediaUnit[]> {
         sql += ' WHERE ' + conditions.join(' AND ');
     }
 
+    if (query.order_by) {
+        sql += ` ORDER BY ${query.order_by.field} ${query.order_by.direction}`;
+    }
+
     let limit = query.limit || 50;
     if (limit > 200) {
         limit = 200;
