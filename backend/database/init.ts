@@ -127,14 +127,6 @@ export async function initDatabase(client: Database) {
             logger.info("Column 'media_id' added to 'moments' table.");
         }
 
-        // Rename media_id to media_id if needed
-        if (columnNames.has('media_id')) {
-            // Copy data from media_id to media_id, then drop media_id
-            await client.exec("UPDATE moments SET media_id = media_id WHERE media_id IS NULL");
-            await client.exec("ALTER TABLE moments DROP COLUMN media_id");
-            logger.info("Migrated 'media_id' to 'media_id' and dropped 'media_id' from 'moments' table.");
-        }
-
         // Add new columns if missing
         if (!columnNames.has('start_time') && columnNames.has('from_time')) {
             await client.exec("ALTER TABLE moments RENAME COLUMN from_time TO start_time");

@@ -1,5 +1,5 @@
 import { expect, test, beforeAll, afterAll } from "bun:test";
-import { getDb, closeDb } from './database';
+import { getDb, closeDb } from '../database';
 import {
     createUser,
     deleteUser,
@@ -8,7 +8,7 @@ import {
     getSessionsByUserId,
     updateSession,
     deleteSession
-} from './utils';
+} from '../utils';
 
 let testUserId: string;
 let testSessionId: string;

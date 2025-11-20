@@ -1,5 +1,5 @@
 import { expect, test, beforeAll, afterAll } from "bun:test";
-import { getDb, closeDb } from './database';
+import { getDb, closeDb } from '../database';
 import {
     createMedia,
     getAllMedia,
@@ -7,7 +7,7 @@ import {
     getMediaByLabel,
     updateMedia,
     deleteMedia
-} from './utils';
+} from '../utils';
 
 beforeAll(async () => {
     await getDb();

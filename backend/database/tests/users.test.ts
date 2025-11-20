@@ -1,12 +1,12 @@
 import { expect, test, beforeAll, afterAll } from "bun:test";
-import { getDb, closeDb } from './database';
+import { getDb, closeDb } from '../database';
 import {
     createUser,
     getUserById,
     getUserByUsername,
     updateUser,
     deleteUser
-} from './utils';
+} from '../utils';
 
 let testUserId: string;
 

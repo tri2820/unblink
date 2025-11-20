@@ -1,6 +1,6 @@
 import { expect, test, beforeAll, afterAll } from "bun:test";
-import { getByQuery, createMediaUnit, deleteMediaUnit, createMedia, deleteMedia } from './utils';
-import { getDb, closeDb } from './database';
+import { getByQuery, createMediaUnit, deleteMediaUnit, createMedia, deleteMedia } from '../utils';
+import { getDb, closeDb } from '../database';
 import type { MediaUnit } from '~/shared/database';
 
 let testMediaId: string;

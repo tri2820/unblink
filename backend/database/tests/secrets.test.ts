@@ -1,12 +1,12 @@
 import { expect, test, beforeAll, afterAll } from "bun:test";
-import { getDb, closeDb } from './database';
+import { getDb, closeDb } from '../database';
 import {
     createSecret,
     getSecret,
     getAllSecrets,
     setSecret,
     deleteSecret
-} from './utils';
+} from '../utils';
 
 let testSecretKey: string;
 

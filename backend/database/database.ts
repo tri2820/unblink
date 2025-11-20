@@ -19,8 +19,7 @@ export async function getDb(): Promise<Database> {
 // Utility to close database connection if needed
 export async function closeDb(): Promise<void> {
     if (dbInstance) {
-        // Assuming there's a way to truly close the connection if better-sqlite3 provides it
-        // For now, just nullify the instance
+        dbInstance.close();
         dbInstance = null;
         logger.info("Database connection closed.");
     }

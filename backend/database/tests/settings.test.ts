@@ -1,11 +1,11 @@
 import { expect, test, beforeAll, afterAll } from "bun:test";
-import { getDb, closeDb } from './database';
+import { getDb, closeDb } from '../database';
 import {
     getAllSettings,
     getSetting,
     setSetting,
     deleteSetting
-} from './utils';
+} from '../utils';
 
 beforeAll(async () => {
     await getDb();

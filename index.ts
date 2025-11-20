@@ -5,6 +5,7 @@ import { admin } from "./admin";
 import { WsClient } from "./backend/WsClient";
 import { FRAMES_DIR, RECORDINGS_DIR, RUNTIME_DIR } from "./backend/appdir";
 import { auth_required, verifyPassword } from "./backend/auth";
+import { closeDb } from "./backend/database/database";
 import { createMedia, createSession, deleteMedia, deleteSession, getAllMedia, getAllSettings as getAllSettingsDB, getAllUsers, getByQuery, getMediaUnitsByEmbedding, getUserByUsername as getUserByUsernameDB, setSetting as setSettingDB, updateMedia } from "./backend/database/utils";
 import { createForwardFunction } from "./backend/forward";
 import { logger } from "./backend/logger";
@@ -491,3 +492,14 @@ if (process.env.DEV_MODE === 'lite') {
         worker_stream,
     });
 }
+
+// Graceful shutdown
+const cleanup = async () => {
+    logger.info("Shutting down server...");
+    await closeDb();
+    server.stop();
+    process.exit(0);
+};
+
+process.on('SIGINT', cleanup);
+process.on('SIGTERM', cleanup);

@@ -1,5 +1,5 @@
 import { expect, test, beforeAll, afterAll } from "bun:test";
-import { getDb, closeDb } from './database';
+import { getDb, closeDb } from '../database';
 import {
     createMedia,
     deleteMedia,
@@ -9,7 +9,7 @@ import {
     updateMoment,
     deleteMoment,
     getMomentsByMediaId
-} from './utils';
+} from '../utils';
 
 let testMediaId: string;
 

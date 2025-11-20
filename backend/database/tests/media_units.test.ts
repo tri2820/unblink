@@ -1,6 +1,6 @@
 import { expect, test, beforeAll, afterAll } from "bun:test";
-import { getDb, closeDb } from './database';
-import { DATABASE_EMBEDDING_DIMENSION } from '../appdir';
+import { getDb, closeDb } from '../database';
+import { DATABASE_EMBEDDING_DIMENSION } from '../../appdir';
 import {
     createMedia,
     deleteMedia,
@@ -10,7 +10,7 @@ import {
     updateMediaUnit,
     deleteMediaUnit,
     getMediaUnitsByEmbedding
-} from './utils';
+} from '../utils';
 
 let testMediaId: string;
 let testMediaUnitId: string;
