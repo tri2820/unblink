@@ -14,7 +14,7 @@ export async function start_streams(opts: {
                 logger.info({ media }, `Starting stream:`);
                 start_stream({
                     worker: opts.worker_stream,
-                    stream_id: media.id,
+                    media_id: media.id,
                     uri: media.uri,
                     saveToDisk: Boolean(media.saveToDisk),
                     saveDir: media.saveDir || '',
@@ -29,7 +29,7 @@ export async function start_streams(opts: {
 export function start_stream(opts: Omit<ServerToWorkerStreamMessage_Add_Stream, 'type'> & { worker: Worker, saveToDisk: boolean, saveDir: string }) {
     const start_msg: ServerToWorkerStreamMessage = {
         type: 'start_stream',
-        stream_id: opts.stream_id,
+        media_id: opts.media_id,
         uri: opts.uri,
         saveToDisk: opts.saveToDisk,
         saveDir: opts.saveDir,
@@ -41,7 +41,7 @@ export function start_stream(opts: Omit<ServerToWorkerStreamMessage_Add_Stream, 
 export function start_stream_file(opts: Omit<ServerToWorkerStreamMessage_Add_File, 'type'> & { worker: Worker }) {
     const start_msg: ServerToWorkerStreamMessage = {
         type: 'start_stream_file',
-        stream_id: opts.stream_id,
+        media_id: opts.media_id,
         file_name: opts.file_name,
     }
 
@@ -50,12 +50,12 @@ export function start_stream_file(opts: Omit<ServerToWorkerStreamMessage_Add_Fil
 
 export function stop_stream(opts: {
     worker: Worker,
-    stream_id: string,
+    media_id: string,
     file_name?: string,
 }) {
     const stop_msg: ServerToWorkerStreamMessage = {
         type: 'stop_stream',
-        stream_id: opts.stream_id,
+        media_id: opts.media_id,
         file_name: opts.file_name,
     }
 

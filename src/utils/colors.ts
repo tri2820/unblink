@@ -116,11 +116,11 @@ const TAILWIND_COLORS = [
     },
 ];
 
-export function getStreamColor(streamId: string) {
-    // Generate a deterministic hash from the streamId
+export function getStreamColor(mediaId: string) {
+    // Generate a deterministic hash from the mediaId
     let hash = 0;
-    for (let i = 0; i < streamId.length; i++) {
-        hash = streamId.charCodeAt(i) + ((hash << 5) - hash);
+    for (let i = 0; i < mediaId.length; i++) {
+        hash = mediaId.charCodeAt(i) + ((hash << 5) - hash);
     }
 
     const index = Math.abs(hash) % TAILWIND_COLORS.length;

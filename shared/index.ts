@@ -5,11 +5,11 @@ import type { EngineToServer } from "./engine";
 // Frame stats message - calculated on backend from frame_motion_energy
 export type FrameStatsMessage = {
     type: "frame_stats";
-    stream_id: string;
+    media_id: string;
     frame_id: string;
     motion_energy: number;
-    total_avg: number;
     sma10: number;
+    sma100: number;
     timestamp: number; // Unix timestamp in milliseconds
 }
 
@@ -59,43 +59,43 @@ export type ServerToClientMessage = (WorkerToServerMessage | EngineToServer | Fr
     session_id?: string;
 }
 
-export type WorkerStreamToServerMessage = (StreamMessage & { stream_id: string, file_name?: string }) | {
+export type WorkerStreamToServerMessage = (StreamMessage & { media_id: string, file_name?: string }) | {
     type: "error";
-    stream_id: string;
+    media_id: string;
 } | {
     type: "restarting";
-    stream_id: string;
+    media_id: string;
 } | {
     type: 'starting';
-    stream_id: string;
+    media_id: string;
 }
 
 export type ServerToWorkerStreamMessage_Add_Stream = {
     type: 'start_stream',
-    stream_id: string,
+    media_id: string,
     uri: string,
     saveToDisk: boolean,
     saveDir: string,
 }
 export type ServerToWorkerStreamMessage_Add_File = {
     type: 'start_stream_file',
-    stream_id: string,
+    media_id: string,
     file_name: string,
 }
 export type ServerToWorkerStreamMessage = ServerToWorkerStreamMessage_Add_Stream | ServerToWorkerStreamMessage_Add_File | {
     type: 'stop_stream',
-    stream_id: string,
+    media_id: string,
     file_name?: string,
 }
 
 // export type ServerToWorkerObjectDetectionMessage = {
-//     stream_id: string;
+//     media_id: string;
 //     file_name?: string;
 // } & FrameMessage
 
 // export type WorkerObjectDetectionToServerMessage = {
 //     type: 'object_detection';
-//     stream_id: string;
+//     media_id: string;
 //     frame_id: string;
 //     file_name?: string;
 //     objects: DetectionObject[];
@@ -140,8 +140,16 @@ export type RESTQuery = {
 export type ServerEphemeralState = {
     frame_stats_messages: FrameStatsMessage[];
     stream_stats_map: Map<string, {
-        sum: number;
-        count: number;
         last10: number[];
+        last100: number[];
+        deviationState: {
+            active: boolean;
+            startTimestamp: number;
+            startFrameId: string;
+            frameIds: string[];
+            peakDeviation: number;
+            consecutiveAboveCount: number;
+            consecutiveBelowCount: number;
+        };
     }>;
 };

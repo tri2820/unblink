@@ -6,7 +6,7 @@ import { Conn } from "~/shared/Conn";
 import type { EngineToServer, ServerRegistrationMessage, ServerToEngine } from "~/shared/engine";
 import { createMoment, getMediaUnitById, updateMediaUnit } from "../database/utils";
 import { logger } from "../logger";
-import { calculateFrameStats } from "../utils/frame_stats";
+import { calculateFrameStats, type MomentData } from "../utils/frame_stats";
 import type { WsClient } from "../WsClient";
 
 
@@ -34,20 +34,23 @@ export function connect_to_engine(props: {
                 // Handle media summary
                 logger.info({ decoded }, `Received media summary`);
 
+                // Legacy moment creation (deprecated - now using real-time deviation detection)
+                /* 
                 for (const moment of decoded.summary.moments) {
                     await createMoment({
                         id: crypto.randomUUID(),
                         media_id: decoded.media_id,
-                        from_time: moment.from_time,
-                        to_time: moment.to_time,
-                        what_old: moment.what_old,
-                        what_new: moment.what_new,
-                        importance_score: moment.importance_score,
-                        labels: moment.labels,
+                        start_time: moment.from_time,
+                        end_time: moment.to_time,
+                        peak_deviation: null,
+                        type: null,
+                        title: moment.what_new,
+                        short_description: moment.what_old,
+                        long_description: null,
                     })
                 }
-
                 logger.info(`Stored ${decoded.summary.moments.length} moments for media_id ${decoded.media_id}`);
+                */
                 return;
             }
 
@@ -82,7 +85,7 @@ export function connect_to_engine(props: {
                     event: 'description',
                     data: {
                         created_at: new Date().toISOString(),
-                        stream_id: decoded.stream_id,
+                        media_id: decoded.media_id,
                         frame_id: decoded.frame_id,
                         description: decoded.description,
                     }
@@ -105,7 +108,7 @@ export function connect_to_engine(props: {
                     type: 'object_detection',
                     data: {
                         created_at: new Date().toISOString(),
-                        stream_id: decoded.stream_id,
+                        media_id: decoded.media_id,
                         frame_id: decoded.frame_id,
                         objects: decoded.objects,
                     }
@@ -121,21 +124,32 @@ export function connect_to_engine(props: {
             if (decoded.type === 'frame_motion_energy') {
                 const state = props.state();
 
-                // Calculate frame stats with averages
+                // Moment detection handler
+                const handleMoment = (moment: MomentData) => {
+                    const eventType = moment.type === 'instant' ? '⚡ Instant' : '🎯 Standard';
+                    logger.info({ moment }, `${eventType} moment detected!`);
+                    // TODO: Query media units in the moment timeframe
+                    // TODO: Send to engine for summarization
+                };
+
+                // Calculate frame stats with moment detection
                 const frameStats = calculateFrameStats(
                     state.stream_stats_map,
-                    decoded.stream_id,
-                    decoded.motion_energy
+                    decoded.media_id,
+                    decoded.frame_id,
+                    decoded.motion_energy,
+                    Date.now(),
+                    handleMoment
                 );
 
                 // Create frame_stats message
                 const statsMessage = {
                     type: 'frame_stats' as const,
-                    stream_id: decoded.stream_id,
+                    media_id: decoded.media_id,
                     frame_id: decoded.frame_id,
                     motion_energy: frameStats.motion_energy,
-                    total_avg: frameStats.total_avg,
                     sma10: frameStats.sma10,
+                    sma100: frameStats.sma100,
                     timestamp: Date.now(),
                 };
 

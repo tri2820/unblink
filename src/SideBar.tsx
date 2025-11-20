@@ -32,7 +32,7 @@ function MediaGroup(props: { group: { label: string; cameras: Camera[] } }) {
                         e.stopPropagation();
                         setTab({
                             type: 'view',
-                            medias: props.group.cameras.map(c => ({ stream_id: c.id })),
+                            medias: props.group.cameras.map(c => ({ media_id: c.id })),
                         });
                     }}
                     class="p-1.5 rounded hover:bg-neu-700 hover:text-white opacity-0 group-hover:opacity-100 transition-all">
@@ -52,7 +52,7 @@ function MediaGroup(props: { group: { label: string; cameras: Camera[] } }) {
                             }
                             return [];
                         };
-                        const isViewed = () => viewedMedias().some(m => m.stream_id === camera.id && !m.file_name);
+                        const isViewed = () => viewedMedias().some(m => m.media_id === camera.id && !m.file_name);
                         const onlyViewed = () => viewedMedias().length === 1 && isViewed();
                         return (
                             <div
@@ -60,7 +60,7 @@ function MediaGroup(props: { group: { label: string; cameras: Camera[] } }) {
                                     setTab({
                                         type: 'view',
                                         medias: [{
-                                            stream_id: camera.id,
+                                            media_id: camera.id,
                                         }],
                                     });
                                 }}

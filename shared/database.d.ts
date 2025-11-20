@@ -47,10 +47,11 @@ export interface User {
 export interface Moment {
     id: string;
     media_id: string;
-    from_time: number;
-    to_time: number;
-    what_old: string;
-    what_new: string;
-    importance_score: number;
-    labels: string[];
+    start_time: number;
+    end_time: number;
+    peak_deviation?: number | null;
+    type?: string | null;
+    title?: string | null;
+    short_description?: string | null;
+    long_description?: string | null;
 }

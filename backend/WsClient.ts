@@ -36,7 +36,7 @@ export class WsClient {
 
             if (msg.type === 'codec' || msg.type === 'frame') {
                 const is_subscribed = this._subscription.streams.some(s => {
-                    return s.id === msg.stream_id && s.file_name === msg.file_name;
+                    return s.id === msg.media_id && s.file_name === msg.file_name;
                 });
                 if (!is_subscribed) {
                     // Not subscribed to this stream

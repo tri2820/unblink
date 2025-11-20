@@ -35,7 +35,7 @@ async function startStream(stream: StartStreamArg, signal: AbortSignal) {
     await streamMedia(stream, (msg) => {
         const worker_msg: WorkerStreamToServerMessage = {
             ...msg,
-            stream_id: stream.id,
+            media_id: stream.id,
             file_name: stream.file_name,
         }
 
@@ -75,17 +75,17 @@ async function startFaultTolerantStream(stream: StartStreamArg, signal: AbortSig
 self.addEventListener("message", async (event) => {
     const msg: ServerToWorkerStreamMessage = event.data;
     if (msg.type === 'start_stream') {
-        logger.info(`Starting stream ${msg.stream_id} with URI ${msg.uri}`);
+        logger.info(`Starting stream ${msg.media_id} with URI ${msg.uri}`);
 
         if (msg.uri) {
             const abortController = new AbortController();
-            const loop_id = msg.stream_id;
+            const loop_id = msg.media_id;
             loops[loop_id] = {
                 controller: abortController,
             };
 
             startFaultTolerantStream({
-                id: msg.stream_id,
+                id: msg.media_id,
                 uri: msg.uri,
                 write_to_file: msg.saveToDisk,
                 save_location: msg.saveDir,
@@ -95,30 +95,30 @@ self.addEventListener("message", async (event) => {
 
     if (msg.type === 'start_stream_file') {
 
-        logger.info(`Starting file stream ${msg.stream_id} for file ${msg.file_name}`);
+        logger.info(`Starting file stream ${msg.media_id} for file ${msg.file_name}`);
         const abortController = new AbortController();
-        const loop_id = `${msg.stream_id}::${msg.file_name}`;
+        const loop_id = `${msg.media_id}::${msg.file_name}`;
         loops[loop_id] = {
             controller: abortController,
         };
-        const dir = `${RECORDINGS_DIR}/${msg.stream_id}`;
+        const dir = `${RECORDINGS_DIR}/${msg.media_id}`;
         const uri = path.join(dir, msg.file_name);
         try {
             await startStream({
-                id: msg.stream_id,
+                id: msg.media_id,
                 uri,
                 file_name: msg.file_name,
                 write_to_file: false,
             }, abortController.signal);
         } catch (error) {
-            logger.error(error, `Error starting file stream for ${msg.stream_id} file ${msg.file_name}`);
+            logger.error(error, `Error starting file stream for ${msg.media_id} file ${msg.file_name}`);
         }
     }
 
     if (msg.type === 'stop_stream') {
-        logger.info(`Stopping stream ${msg.stream_id}`);
+        logger.info(`Stopping stream ${msg.media_id}`);
         // Stop the stream and clean up resources
-        const loop_id = msg.file_name ? `${msg.stream_id}::${msg.file_name}` : msg.stream_id;
+        const loop_id = msg.file_name ? `${msg.media_id}::${msg.file_name}` : msg.media_id;
         loops[loop_id]?.controller.abort();
     }
 });

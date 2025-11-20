@@ -3,7 +3,7 @@ export type WebhookMessage = {
     event: 'description',
     data: {
         created_at: string;
-        stream_id: string;
+        media_id: string;
         frame_id: string;
         description: string;
     }
@@ -11,7 +11,7 @@ export type WebhookMessage = {
     type: 'object_detection';
     data: {
         created_at: string;
-        stream_id: string;
+        media_id: string;
         frame_id: string;
         objects: DetectionObject[];
     }

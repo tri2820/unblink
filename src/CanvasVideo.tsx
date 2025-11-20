@@ -252,7 +252,7 @@ class MjpegPlayer {
     }
 }
 
-export default function CanvasVideo(props: { stream_id: string, file_name?: string, showDetections: Accessor<boolean>, camera_name?: string }) {
+export default function CanvasVideo(props: { media_id: string, file_name?: string, showDetections: Accessor<boolean>, camera_name?: string }) {
     const [canvasRef, setCanvasRef] = createSignal<HTMLCanvasElement>();
     const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
     const [isDrawing, setIsDrawing] = createSignal(false);
@@ -287,8 +287,8 @@ export default function CanvasVideo(props: { stream_id: string, file_name?: stri
         const s = subscription();
         if (!s) return;
 
-        const isCorrectStreamMessage = (message.type == 'frame' || message.type == 'codec') && message.stream_id === props.stream_id && message.file_name === props.file_name && message.session_id == s.session_id;
-        const isCorrectEngineMessage = message.type == 'frame_object_detection' && message.stream_id === props.stream_id && message.session_id == s.session_id;
+        const isCorrectStreamMessage = (message.type == 'frame' || message.type == 'codec') && message.media_id === props.media_id && message.file_name === props.file_name && message.session_id == s.session_id;
+        const isCorrectEngineMessage = message.type == 'frame_object_detection' && message.media_id === props.media_id && message.session_id == s.session_id;
         // if (message.type === 'frame_object_detection' && isCorrectEngineMessage) {
         //     console.log('CanvasVideo received message:', message);
         // }

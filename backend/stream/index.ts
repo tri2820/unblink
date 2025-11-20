@@ -154,9 +154,9 @@ type OutputFileObject = {
 };
 
 class OutputFile {
-    static async create(streamId: string, videoEncoder: Encoder, saveDir?: string): Promise<OutputFileObject> {
+    static async create(mediaId: string, videoEncoder: Encoder, saveDir?: string): Promise<OutputFileObject> {
         const from = new Date();
-        const dir = saveDir ? path.join(saveDir, streamId) : `${RECORDINGS_DIR}/${streamId}`;
+        const dir = saveDir ? path.join(saveDir, mediaId) : `${RECORDINGS_DIR}/${mediaId}`;
         await fs.mkdir(dir, { recursive: true });
         const filePath = path.join(dir, `from_${from.getTime()}_ms.mkv`);
         const mediaOutput = await MediaOutput.open(filePath, {

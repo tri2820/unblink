@@ -182,7 +182,7 @@ const server = Bun.serve({
                 // Start the media stream
                 start_stream({
                     worker: worker_stream,
-                    stream_id: id,
+                    media_id: id,
                     uri: uri as string,
                     saveToDisk: saveToDisk as boolean,
                     saveDir: saveDir as string,
@@ -219,7 +219,7 @@ const server = Bun.serve({
                         if (parts.length < 2) {
                             continue;
                         }
-                        const streamId = parts[0]!;
+                        const mediaId = parts[0]!;
                         // from_1762122447803_ms.mkv
                         const file_name = parts[1]!;
 
@@ -229,11 +229,11 @@ const server = Bun.serve({
                         const fromDate = from_ms ? new Date(parseInt(from_ms)) : null;
                         const toDate = to_ms ? new Date(parseInt(to_ms)) : null;
 
-                        if (!recordingsByStream[streamId]) {
-                            recordingsByStream[streamId] = [];
+                        if (!recordingsByStream[mediaId]) {
+                            recordingsByStream[mediaId] = [];
                         }
 
-                        recordingsByStream[streamId].push({
+                        recordingsByStream[mediaId].push({
                             file_name: file_name,
                             from_ms: fromDate?.getTime(),
                             to_ms: toDate?.getTime(),
@@ -346,7 +346,6 @@ const server = Bun.serve({
                 }
 
                 const media_units = await getMediaUnitsByEmbedding(embedding);
-                console.log('media_units', media_units)
                 return Response.json({ media_units });
             }
         },
@@ -394,7 +393,7 @@ const server = Bun.serve({
                             // Notify the worker about the removed file stream
                             stop_stream({
                                 worker: worker_stream,
-                                stream_id: stream.id,
+                                media_id: stream.id,
                                 file_name: stream.file_name,
                             });
                         }
@@ -408,7 +407,7 @@ const server = Bun.serve({
                             // Notify the worker about the added file stream
                             start_stream_file({
                                 worker: worker_stream,
-                                stream_id: stream.id,
+                                media_id: stream.id,
                                 file_name: stream.file_name!,
                             });
                         }

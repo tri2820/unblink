@@ -8,7 +8,7 @@ import { getStreamColor } from "./utils/colors";
 
 type MotionCanvasProps = {
     viewedMedias: () => {
-        stream_id: string;
+        media_id: string;
         file_name?: string | undefined;
     }[];
     cameras: () => { id: string; name: string }[];
@@ -39,7 +39,7 @@ function MotionCanvas(props: MotionCanvasProps) {
         const allMessages: FrameStatsMessage[] = [];
         for (const media of props.viewedMedias()) {
             if (!media.file_name) { // Only live streams
-                const messages = statsMessages[media.stream_id] || [];
+                const messages = statsMessages[media.media_id] || [];
                 allMessages.push(...messages);
             }
         }
@@ -80,56 +80,56 @@ function MotionCanvas(props: MotionCanvasProps) {
             const yTop = Math.round(canvasHeight - barHeight);
             const h = canvasHeight - yTop;
 
-            const colors = getStreamColor(msg.stream_id);
+            const colors = getStreamColor(msg.media_id);
             ctx.fillStyle = colors.base;
             ctx.fillRect(x, yTop, effectiveBarWidth, h);
         });
 
         // Draw average lines per stream
         const streamPaths: Record<string, {
-            totalAvg: { x: number, y: number }[],
             sma10: { x: number, y: number }[],
+            sma100: { x: number, y: number }[],
             colors: ReturnType<typeof getStreamColor>
         }> = {};
 
         allMessages.forEach((msg, idx) => {
             const x = idx * barWidth + barSpacing / 2 + effectiveBarWidth / 2;
-            const streamId = msg.stream_id;
+            const mediaId = msg.media_id;
 
-            if (!streamPaths[streamId]) {
-                streamPaths[streamId] = {
-                    totalAvg: [],
+            if (!streamPaths[mediaId]) {
+                streamPaths[mediaId] = {
                     sma10: [],
-                    colors: getStreamColor(streamId)
+                    sma100: [],
+                    colors: getStreamColor(mediaId)
                 };
             }
 
-            const totalAvgRatio = maxEnergy > 0 ? msg.total_avg / maxEnergy : 0;
-            const totalAvgY = canvasHeight - (totalAvgRatio * canvasHeight);
-            streamPaths[streamId]!.totalAvg.push({ x, y: totalAvgY });
+            const sma100Ratio = maxEnergy > 0 ? msg.sma100 / maxEnergy : 0;
+            const sma100Y = canvasHeight - (sma100Ratio * canvasHeight);
+            streamPaths[mediaId]!.sma100.push({ x, y: sma100Y });
 
             const sma10Ratio = maxEnergy > 0 ? msg.sma10 / maxEnergy : 0;
             const sma10Y = canvasHeight - (sma10Ratio * canvasHeight);
-            streamPaths[streamId]!.sma10.push({ x, y: sma10Y });
+            streamPaths[mediaId]!.sma10.push({ x, y: sma10Y });
         });
 
         // Draw lines for each stream
         Object.values(streamPaths).forEach(paths => {
-            // Draw Total Average line
-            if (paths.totalAvg.length > 0) {
+            // Draw SMA-100 line
+            if (paths.sma100.length > 0) {
                 ctx.beginPath();
                 ctx.strokeStyle = paths.colors.shades[300];
                 ctx.lineWidth = 1.5;
 
-                if (paths.totalAvg.length === 1) {
-                    ctx.moveTo(0, paths.totalAvg[0]!.y);
-                    ctx.lineTo(canvasWidth, paths.totalAvg[0]!.y);
+                if (paths.sma100.length === 1) {
+                    ctx.moveTo(0, paths.sma100[0]!.y);
+                    ctx.lineTo(canvasWidth, paths.sma100[0]!.y);
                 } else {
-                    ctx.moveTo(0, paths.totalAvg[0]!.y);
-                    for (let i = 0; i < paths.totalAvg.length; i++) {
-                        ctx.lineTo(paths.totalAvg[i]!.x, paths.totalAvg[i]!.y);
+                    ctx.moveTo(0, paths.sma100[0]!.y);
+                    for (let i = 0; i < paths.sma100.length; i++) {
+                        ctx.lineTo(paths.sma100[i]!.x, paths.sma100[i]!.y);
                     }
-                    ctx.lineTo(canvasWidth, paths.totalAvg[paths.totalAvg.length - 1]!.y);
+                    ctx.lineTo(canvasWidth, paths.sma100[paths.sma100.length - 1]!.y);
                 }
                 ctx.stroke();
             }
@@ -177,7 +177,7 @@ function MotionCanvas(props: MotionCanvasProps) {
 
 export default function ActivityBar(props: {
     viewedMedias: () => {
-        stream_id: string;
+        media_id: string;
         file_name?: string | undefined;
     }[];
     cameras: () => { id: string; name: string }[];
@@ -187,14 +187,20 @@ export default function ActivityBar(props: {
 
     // Get stream info for tooltip
     const getStreamInfo = () => {
-        const streams: { name: string, color: string }[] = [];
+        const streams: { name: string, color: string, latestValue: number | null }[] = [];
         for (const media of props.viewedMedias()) {
             if (media.file_name) continue;
-            const colors = getStreamColor(media.stream_id);
-            const camera = props.cameras().find(c => c.id === media.stream_id);
+            const colors = getStreamColor(media.media_id);
+            const camera = props.cameras().find(c => c.id === media.media_id);
+
+            // Get latest motion_energy for this stream
+            const messages = statsMessages[media.media_id] || [];
+            const latestValue = messages.length > 0 ? messages[messages.length - 1]!.motion_energy : null;
+
             streams.push({
-                name: camera?.name || media.stream_id.slice(0, 8),
-                color: colors.base
+                name: camera?.name || media.media_id.slice(0, 8),
+                color: colors.base,
+                latestValue
             });
         }
         return streams;
@@ -236,10 +242,13 @@ export default function ActivityBar(props: {
                             {(stream) => (
                                 <div class="flex items-center gap-2">
                                     <div
-                                        class="w-2 h-2 rounded-full"
+                                        class="w-2 h-2 rounded-full flex-shrink-0"
                                         style={{ "background-color": stream.color }}
                                     />
-                                    <span>{stream.name}</span>
+                                    <span class="flex-shrink-0">{stream.name}</span>
+                                    <span class="text-neu-300 ml-auto font-mono text-xs">
+                                        {stream.latestValue !== null ? stream.latestValue.toFixed(5) : '—'}
+                                    </span>
                                 </div>
                             )}
                         </For>

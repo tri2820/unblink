@@ -480,85 +480,50 @@ export async function getMediaUnitsByIds(ids: string[]): Promise<MediaUnit[]> {
 export async function getMomentById(id: string): Promise<Moment | undefined> {
     const db = await getDb();
     const stmt = db.prepare('SELECT * FROM moments WHERE id = ?');
-    const row = await stmt.get(id) as any;
-
-    if (row) {
-        try {
-            row.labels = JSON.parse(row.labels);
-        } catch (e) {
-            console.error(`Failed to parse labels for moment ${id}:`, row.labels);
-            row.labels = []; // Default to empty array on error
-        }
-    }
-    return row as Moment | undefined;
+    return await stmt.get(id) as Moment | undefined;
 }
 
 export async function getAllMoments(): Promise<Moment[]> {
     const db = await getDb();
-    const stmt = db.prepare('SELECT * FROM moments ORDER BY from_time DESC');
-    const rows = await stmt.all() as any[];
-
-    return rows.map(row => {
-        try {
-            row.labels = JSON.parse(row.labels);
-        } catch (e) {
-            console.error(`Failed to parse labels for moment ${row.id}:`, row.labels);
-            row.labels = []; // Default to empty array on error
-        }
-        return row;
-    }) as Moment[];
+    const stmt = db.prepare('SELECT * FROM moments ORDER BY start_time DESC');
+    return await stmt.all() as Moment[];
 }
 
-export async function getMomentsByLabel(label: string): Promise<Moment[]> {
+export async function getMomentsByMediaId(mediaId: string): Promise<Moment[]> {
     const db = await getDb();
-    const stmt = db.prepare("SELECT * FROM moments WHERE labels LIKE ?");
-    const rows = await stmt.all(`%"${label}"%`) as any[]; // Search for label inside JSON array string
-
-    return rows.map(row => {
-        try {
-            row.labels = JSON.parse(row.labels);
-        } catch (e) {
-            console.error(`Failed to parse labels for moment ${row.id}:`, row.labels);
-            row.labels = []; // Default to empty array on error
-        }
-        return row;
-    }) as Moment[];
+    const stmt = db.prepare('SELECT * FROM moments WHERE media_id = ? ORDER BY start_time DESC');
+    return await stmt.all(mediaId) as Moment[];
 }
 
 export async function createMoment(moment: Moment): Promise<void> {
     const db = await getDb();
 
     const stmt = db.prepare(`
-        INSERT INTO moments (id, media_id, from_time, to_time, what_old, what_new, importance_score, labels)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO moments (id, media_id, start_time, end_time, peak_deviation, type, title, short_description, long_description)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     await stmt.run(
         moment.id,
         moment.media_id,
-        moment.from_time,
-        moment.to_time,
-        moment.what_old,
-        moment.what_new,
-        moment.importance_score,
-        JSON.stringify(moment.labels)
+        moment.start_time,
+        moment.end_time,
+        moment.peak_deviation || null,
+        moment.type || null,
+        moment.title || null,
+        moment.short_description || null,
+        moment.long_description || null
     );
 }
 
 export async function updateMoment(id: string, updates: Partial<Omit<Moment, 'id'>>): Promise<void> {
     const db = await getDb();
 
-    // Build dynamic update query
     const fields = Object.keys(updates);
     if (fields.length === 0) return;
 
-    const updatesCopy: any = { ...updates };
-    if (updatesCopy.labels) {
-        updatesCopy.labels = JSON.stringify(updatesCopy.labels);
-    }
-
     const setClause = fields.map(field => `${field} = ?`).join(', ');
-    const values = fields.map(field => updatesCopy[field]);
+    const values = fields.map(field => (updates as any)[field]);
 
     const stmt = db.prepare(`UPDATE moments SET ${setClause} WHERE id = ?`);
     await stmt.run(...values, id);
@@ -568,20 +533,4 @@ export async function deleteMoment(id: string): Promise<void> {
     const db = await getDb();
     const stmt = db.prepare('DELETE FROM moments WHERE id = ?');
     await stmt.run(id);
-}
-
-export async function getMomentsByMediaId(mediaId: string): Promise<Moment[]> {
-    const db = await getDb();
-    const stmt = db.prepare('SELECT * FROM moments WHERE media_id = ? ORDER BY from_time DESC');
-    const rows = await stmt.all(mediaId) as any[];
-
-    return rows.map(row => {
-        try {
-            row.labels = JSON.parse(row.labels);
-        } catch (e) {
-            console.error(`Failed to parse labels for moment ${row.id}:`, row.labels);
-            row.labels = []; // Default to empty array on error
-        }
-        return row;
-    }) as Moment[];
 }

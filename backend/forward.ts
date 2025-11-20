@@ -19,7 +19,7 @@ export const createForwardFunction = (opts: {
 }) => {
     const state: {
         streams: {
-            [stream_id: string]: {
+            [media_id: string]: {
                 last_engine_sent__index: number,
                 last_engine_sent__object_detection: number,
             }
@@ -49,7 +49,7 @@ export const createForwardFunction = (opts: {
         //         type: 'object_detection',
         //         data: {
         //             created_at: new Date().toISOString(),
-        //             stream_id: decoded.stream_id,
+        //             media_id: decoded.media_id,
         //             frame_id: decoded.frame_id,
         //             objects: decoded.objects,
         //         }
@@ -59,8 +59,8 @@ export const createForwardFunction = (opts: {
         // Occasionally, does indexing / object detection on the frame
         if (decoded.type === 'frame') {
             const now = Date.now();
-            if (!state.streams[decoded.stream_id]) {
-                state.streams[decoded.stream_id] = {
+            if (!state.streams[decoded.media_id]) {
+                state.streams[decoded.media_id] = {
                     last_engine_sent__index: 0,
                     last_engine_sent__object_detection: 0,
                 }
@@ -73,17 +73,17 @@ export const createForwardFunction = (opts: {
                 const object_detection_enabled = opts.settings()['object_detection_enabled'] === 'true';
                 if (!object_detection_enabled) return;
                 // Throttle engine forwarding to 1 fps
-                if (now - state.streams[decoded.stream_id]!.last_engine_sent__object_detection < 1000) return;
-                state.streams[decoded.stream_id]!.last_engine_sent__object_detection = now;
+                if (now - state.streams[decoded.media_id]!.last_engine_sent__object_detection < 1000) return;
+                state.streams[decoded.media_id]!.last_engine_sent__object_detection = now;
 
-                // logger.info({ path: decoded.path }, `Forwarding frame ${decoded.frame_id} from stream ${decoded.stream_id} to object detection worker.`);
+                // logger.info({ path: decoded.path }, `Forwarding frame ${decoded.frame_id} from stream ${decoded.media_id} to object detection worker.`);
 
                 const msg: ServerToEngine = {
                     type: "frame_binary",
                     workers: {
                         'object_detection': true,
                     },
-                    stream_id: decoded.stream_id,
+                    media_id: decoded.media_id,
                     frame_id,
                     frame: decoded.data
                 }
@@ -93,8 +93,8 @@ export const createForwardFunction = (opts: {
 
             (async () => {
                 // Throttle engine forwarding to 1 frame every 10 seconds
-                if (now - state.streams[decoded.stream_id]!.last_engine_sent__index < 10000) return;
-                state.streams[decoded.stream_id]!.last_engine_sent__index = now;
+                if (now - state.streams[decoded.media_id]!.last_engine_sent__index < 10000) return;
+                state.streams[decoded.media_id]!.last_engine_sent__index = now;
 
                 // Write data to file
                 const _path = path.join(FRAMES_DIR, `${frame_id}.jpg`);
@@ -107,7 +107,7 @@ export const createForwardFunction = (opts: {
                     at_time: Date.now(), // Using timestamp instead of Date object
                     description: null,
                     embedding: null,
-                    media_id: decoded.stream_id,
+                    media_id: decoded.media_id,
                     path: _path,
                 };
 
@@ -125,7 +125,7 @@ export const createForwardFunction = (opts: {
                         'vlm': true,
                         'embedding': true,
                     },
-                    stream_id: decoded.stream_id,
+                    media_id: decoded.media_id,
                     frame_id,
                     frame: decoded.data,
                 }

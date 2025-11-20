@@ -62,7 +62,7 @@ export default function ViewContent() {
 
             setSubscription({
                 session_id,
-                streams: medias.map(media => ({ id: media.stream_id, file_name: media.file_name })),
+                streams: medias.map(media => ({ id: media.media_id, file_name: media.file_name })),
             });
         } else {
             setSubscription();
@@ -88,7 +88,7 @@ export default function ViewContent() {
                 query: {
                     table: 'media_units',
                     where: [{
-                        'field': 'media_id', 'op': 'in', 'value': medias.map(m => m.stream_id),
+                        'field': 'media_id', 'op': 'in', 'value': medias.map(m => m.media_id),
                     }, {
                         'field': 'description', 'op': 'is_not', 'value': null
                     }],
@@ -166,10 +166,10 @@ export default function ViewContent() {
                                                 {(media) => {
                                                     return <div style={{ width: `calc((100% - (${cols() - 1} * ${GAP_SIZE})) / ${cols()})`, height: '100%' }}>
                                                         <CanvasVideo
-                                                            stream_id={media.stream_id}
+                                                            media_id={media.media_id}
                                                             file_name={media.file_name}
                                                             showDetections={showDetections}
-                                                            camera_name={cameras().find(c => c.id === media.stream_id)?.name}
+                                                            camera_name={cameras().find(c => c.id === media.media_id)?.name}
                                                         />
                                                     </div>
                                                 }}

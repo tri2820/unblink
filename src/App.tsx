@@ -26,21 +26,22 @@ export default function App() {
             const data: ServerEphemeralState = await response.json();
             console.log('Fetched global state from server:', data);
 
-            // Group messages by stream_id
+            // Group messages by media_id
             const messagesByStream: Record<string, FrameStatsMessage[]> = {};
             for (const msg of data.frame_stats_messages) {
-                if (!messagesByStream[msg.stream_id]) {
-                    messagesByStream[msg.stream_id] = [];
+                if (!messagesByStream[msg.media_id]) {
+                    messagesByStream[msg.media_id] = [];
                 }
-                messagesByStream[msg.stream_id]!.push(msg);
+                messagesByStream[msg.media_id]!.push(msg);
             }
 
             // Keep only last 100 messages per stream
-            for (const streamId in messagesByStream) {
-                messagesByStream[streamId] = messagesByStream[streamId]!.slice(-MAX_MOTION_MESSAGES_LENGTH_EACH);
+            for (const mediaId in messagesByStream) {
+                messagesByStream[mediaId] = messagesByStream[mediaId]!.slice(-MAX_MOTION_MESSAGES_LENGTH_EACH);
             }
 
             setStatsMessages(messagesByStream);
+            console.log('messagesByStream', messagesByStream)
         } catch (error) {
             console.error('Error fetching global state from server:', error);
         }
@@ -51,8 +52,8 @@ export default function App() {
         if (!m) return;
 
         if (m.type === 'frame_stats') {
-            const streamId = m.stream_id;
-            setStatsMessages(streamId, (prev = []) => {
+            const mediaId = m.media_id;
+            setStatsMessages(mediaId, (prev = []) => {
                 const updated = [...prev, m];
                 return updated.slice(-MAX_MOTION_MESSAGES_LENGTH_EACH);
             });
@@ -70,7 +71,7 @@ export default function App() {
         if (!m) return;
 
         if (m.type === 'agent_card') {
-            // console.log('Received description for stream', m.stream_id, ':', m.description);
+            // console.log('Received description for stream', m.media_id, ':', m.description);
             setAgentCards(prev => {
                 return [...prev, m.media_unit].slice(-200);
             });

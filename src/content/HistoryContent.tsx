@@ -41,16 +41,16 @@ export default function HistoryContent() {
             }>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 ">
                     <For each={Object.entries(recordings() || {})}>
-                        {([streamId, recordings]) => (
+                        {([mediaId, recordings]) => (
                             <For each={recordings}>
                                 {({ file_name, from_ms, to_ms }) => {
-                                    const title = () => cameras().find(camera => camera.id === streamId)?.name ?? streamId
+                                    const title = () => cameras().find(camera => camera.id === mediaId)?.name ?? mediaId
                                     return <div
                                         onClick={() => {
                                             setTab({
                                                 type: 'view',
                                                 medias: [{
-                                                    stream_id: streamId,
+                                                    media_id: mediaId,
                                                     file_name,
                                                 }],
                                             });

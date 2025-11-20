@@ -19,7 +19,7 @@ export type Tab = {
 } | {
     type: 'view';
     medias: {
-        stream_id: string;
+        media_id: string;
         file_name?: string;
     }[]
 } | {
@@ -86,7 +86,7 @@ export const relevantAgentCards = () => {
     const liveStreams = viewedMedias().filter(m => !m.file_name)
     const cards = agentCards();
     // newest first
-    const relevant_cards = cards.filter(c => liveStreams.some(media => media.stream_id === c.media_id)).toSorted((a, b) => new Date(b.at_time).getTime() - new Date(a.at_time).getTime());
+    const relevant_cards = cards.filter(c => liveStreams.some(media => media.media_id === c.media_id)).toSorted((a, b) => new Date(b.at_time).getTime() - new Date(a.at_time).getTime());
 
     return relevant_cards;
 }
