@@ -86,6 +86,10 @@ body {
   }
 }
 
+.moment-card {
+  @apply bg-neu-800 hover:bg-neu-850 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-200 cursor-pointer border border-neu-700/50
+}
+
 .btn-primary {
   @apply drop-shadow-2xl px-4 py-2 rounded-xl border border-neu-750 bg-neu-800 hover:bg-neu-850 flex items-center space-x-2 justify-center
 }

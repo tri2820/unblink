@@ -138,7 +138,7 @@ export default function ViewContent() {
                         fallback={<div class="flex justify-center items-center h-full">No camera selected</div>}
                     >
                         <div class="h-full w-full flex flex-col space-y-2">
-                            <div class="flex-none flex items-center space-x-6 py-2 px-4 bg-neu-900 rounded-2xl border border-neu-800 h-14">
+                            <div class="flex-none flex items-center space-x-2 py-2 px-4 bg-neu-900 rounded-2xl border border-neu-800 h-14">
                                 <div class="flex-1 text-sm text-neu-400 line-clamp-1">Viewing {viewedMedias().length} streams</div>
                                 <div>
                                     <ConfigureViewDialog

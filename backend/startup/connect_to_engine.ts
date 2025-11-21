@@ -125,11 +125,26 @@ export function connect_to_engine(props: {
                 const state = props.state();
 
                 // Moment detection handler
-                const handleMoment = (moment: MomentData) => {
+                const handleMoment = async (moment: MomentData) => {
                     const eventType = moment.type === 'instant' ? '⚡ Instant' : '🎯 Standard';
                     logger.info({ moment }, `${eventType} moment detected!`);
-                    // TODO: Query media units in the moment timeframe
-                    // TODO: Send to engine for summarization
+
+                    try {
+                        await createMoment({
+                            id: crypto.randomUUID(),
+                            media_id: moment.media_id,
+                            start_time: moment.start_timestamp,
+                            end_time: moment.end_timestamp,
+                            peak_deviation: moment.peak_deviation,
+                            type: moment.type,
+                            title: null,
+                            short_description: null,
+                            long_description: null,
+                        });
+                        logger.info(`Saved moment to database for media ${moment.media_id}`);
+                    } catch (error) {
+                        logger.error({ error, moment }, "Failed to save moment to database");
+                    }
                 };
 
                 // Calculate frame stats with moment detection

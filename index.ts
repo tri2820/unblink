@@ -6,7 +6,7 @@ import { WsClient } from "./backend/WsClient";
 import { FRAMES_DIR, RECORDINGS_DIR, RUNTIME_DIR } from "./backend/appdir";
 import { auth_required, verifyPassword } from "./backend/auth";
 import { closeDb } from "./backend/database/database";
-import { createMedia, createSession, deleteMedia, deleteSession, getAllMedia, getAllSettings as getAllSettingsDB, getAllUsers, getByQuery, getMediaUnitsByEmbedding, getUserByUsername as getUserByUsernameDB, setSetting as setSettingDB, updateMedia } from "./backend/database/utils";
+import { createMedia, createSession, deleteMedia, deleteSession, getAllMedia, getAllMoments, getAllSettings as getAllSettingsDB, getAllUsers, getByQuery, getFirstMediaUnitInTimeRange, getMediaUnitsByEmbedding, getUserByUsername as getUserByUsernameDB, setSetting as setSettingDB, updateMedia } from "./backend/database/utils";
 import { createForwardFunction } from "./backend/forward";
 import { logger } from "./backend/logger";
 import { check_version } from "./backend/startup/check_version";
@@ -208,6 +208,19 @@ const server = Bun.serve({
 
                 const media_units = await getByQuery(query);
                 return Response.json({ media_units });
+            }
+        },
+        '/moments': {
+            GET: async () => {
+                const moments = await getAllMoments();
+                const momentsWithThumbnails = await Promise.all(moments.map(async (moment) => {
+                    const firstUnit = await getFirstMediaUnitInTimeRange(moment.media_id, moment.start_time, moment.end_time);
+                    return {
+                        ...moment,
+                        thumbnail: firstUnit ? firstUnit.path : null
+                    };
+                }));
+                return Response.json(momentsWithThumbnails);
             }
         },
         '/recordings': {

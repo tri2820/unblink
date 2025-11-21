@@ -476,6 +476,12 @@ export async function getMediaUnitsByIds(ids: string[]): Promise<MediaUnit[]> {
     return rows;
 }
 
+export async function getFirstMediaUnitInTimeRange(mediaId: string, startTime: number, endTime: number): Promise<MediaUnit | undefined> {
+    const db = await getDb();
+    const stmt = db.prepare('SELECT * FROM media_units WHERE media_id = ? AND at_time >= ? AND at_time <= ? ORDER BY at_time ASC LIMIT 1');
+    return await stmt.get(mediaId, startTime, endTime) as MediaUnit | undefined;
+}
+
 // Moment utilities
 export async function getMomentById(id: string): Promise<Moment | undefined> {
     const db = await getDb();
