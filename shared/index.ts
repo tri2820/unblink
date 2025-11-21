@@ -152,4 +152,5 @@ export type ServerEphemeralState = {
             consecutiveBelowCount: number;
         };
     }>;
+    active_moments: Set<string>;
 };

@@ -6,11 +6,9 @@ export type ServerRegistrationMessage = {
 export type ServerToEngine =
     | {
         type: "frame_binary";
-        workers: Partial<{
-            'vlm': true,
-            'object_detection': true,
-            'embedding': true,
-        }>
+        workers: {
+            [worker_id: string]: true
+        }
         frame_id: string;
         media_id: string;
         frame: Uint8Array;

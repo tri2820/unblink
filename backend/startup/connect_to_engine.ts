@@ -154,7 +154,17 @@ export function connect_to_engine(props: {
                     decoded.frame_id,
                     decoded.motion_energy,
                     Date.now(),
-                    handleMoment
+                    handleMoment,
+                    // onMaybeMomentStart
+                    () => {
+                        logger.info(`Maybe moment started for ${decoded.media_id}`);
+                        state.active_moments.add(decoded.media_id);
+                    },
+                    // onMaybeMomentEnd
+                    () => {
+                        logger.info(`Maybe moment ended for ${decoded.media_id}`);
+                        state.active_moments.delete(decoded.media_id);
+                    }
                 );
 
                 // Create frame_stats message

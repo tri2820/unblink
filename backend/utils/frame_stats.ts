@@ -70,7 +70,9 @@ export function calculateFrameStats(
     frame_id: string,
     motion_energy: number,
     timestamp: number,
-    onMoment?: MomentCallback
+    onMoment?: MomentCallback,
+    onMaybeMomentStart?: () => void,
+    onMaybeMomentEnd?: () => void
 ): FrameStats {
     let streamStats = streamStatsMap.get(media_id);
     if (!streamStats) {
@@ -124,6 +126,7 @@ export function calculateFrameStats(
                 state.startFrameId = frame_id;
                 state.frameIds = [frame_id];
                 state.peakDeviation = deviation;
+                onMaybeMomentStart?.();
             } else if (state.active) {
                 // Continue tracking deviation
                 state.frameIds.push(frame_id);
@@ -164,6 +167,7 @@ export function calculateFrameStats(
                 state.active = false;
                 state.frameIds = [];
                 state.peakDeviation = 0;
+                onMaybeMomentEnd?.();
             }
         }
     }

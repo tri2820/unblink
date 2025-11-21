@@ -212,7 +212,8 @@ export default function ViewContent() {
                                             return <div class="animate-push-down p-4 bg-neu-850 rounded-2xl space-y-2">
                                                 <div class="font-semibold">{stream_name()}</div>
                                                 <div class="text-neu-400 text-sm">{formatDistance(card.at_time, Date.now(), {
-                                                    addSuffix: true
+                                                    addSuffix: true,
+                                                    includeSeconds: true
                                                 })}</div>
                                                 <div>{card.description}</div>
                                                 <img src={`/files?path=${card.path}`} class="rounded-lg" />

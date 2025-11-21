@@ -1,5 +1,6 @@
 import type { ServerWebSocket } from "bun";
 import { decode } from "cbor-x";
+import path from "node:path";
 import { v4 as uuid } from 'uuid';
 import { admin } from "./admin";
 import { WsClient } from "./backend/WsClient";
@@ -17,8 +18,7 @@ import { create_webhook_forward } from "./backend/webhook";
 import { spawn_worker } from "./backend/worker_connect/shared";
 import { start_stream, start_stream_file, start_streams, stop_stream } from "./backend/worker_connect/worker_stream_connector";
 import homepage from "./index.html";
-import type { ClientToServerMessage, DbUser, ServerEphemeralState, RecordingsResponse, RESTQuery } from "./shared";
-import path from "node:path";
+import type { ClientToServerMessage, DbUser, RecordingsResponse, RESTQuery, ServerEphemeralState } from "./shared";
 
 // Check args for "admin" mode
 if (process.argv[2] === "admin") {
@@ -43,6 +43,7 @@ const forward_to_webhook = create_webhook_forward({ settings });
 const state: ServerEphemeralState = {
     frame_stats_messages: [],
     stream_stats_map: new Map(),
+    active_moments: new Set(),
 }
 const engine_conn = connect_to_engine({
     ENGINE_URL,
@@ -487,15 +488,15 @@ const server = Bun.serve({
 
 logger.info(`Server running on ${HOSTNAME}:${PORT}`);
 
-const forward = createForwardFunction({
+const handleMessage = createForwardFunction({
     clients,
-    // worker_object_detection: () => worker_object_detection,
     settings,
     engine_conn: () => engine_conn,
     forward_to_webhook,
+    state: () => state,
 })
 
-const worker_stream = await spawn_worker('worker_stream.js', forward);
+const worker_stream = await spawn_worker('worker_stream.js', handleMessage);
 
 if (process.env.DEV_MODE === 'lite') {
     logger.info("Running in lite development mode - skipping stream startup");
@@ -506,13 +507,13 @@ if (process.env.DEV_MODE === 'lite') {
     });
 }
 
-// Graceful shutdown
-const cleanup = async () => {
-    logger.info("Shutting down server...");
-    await closeDb();
-    server.stop();
-    process.exit(0);
-};
+// // Graceful shutdown
+// const cleanup = async () => {
+//     logger.info("Shutting down server...");
+//     await closeDb();
+//     server.stop();
+//     process.exit(0);
+// };
 
-process.on('SIGINT', cleanup);
-process.on('SIGTERM', cleanup);
+// process.on('SIGINT', cleanup);
+// process.on('SIGTERM', cleanup);

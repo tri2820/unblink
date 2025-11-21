@@ -10,128 +10,135 @@ import { FRAMES_DIR } from "./appdir";
 import { createMediaUnit } from "./database/utils";
 import type { WsClient } from "./WsClient";
 
-export const createForwardFunction = (opts: {
+import type { ServerEphemeralState } from "~/shared";
+import { logger } from "./logger";
+
+type ForwardingState = {
+    streams: {
+        [media_id: string]: {
+            [key: string]: number | undefined
+        }
+    }
+};
+
+type ForwardingOpts = {
     clients: Map<ServerWebSocket, WsClient>,
-    // worker_object_detection: () => Worker,
     settings: () => Record<string, string>,
     engine_conn: () => Conn<ServerToEngine, EngineToServer>,
     forward_to_webhook: (msg: WebhookMessage) => Promise<void>,
-}) => {
-    const state: {
-        streams: {
-            [media_id: string]: {
-                last_engine_sent__index: number,
-                last_engine_sent__object_detection: number,
-            }
-        }
-    } = {
+    state: () => ServerEphemeralState,
+};
+
+export const createForwardFunction = (opts: ForwardingOpts) => {
+    const state: ForwardingState = {
         streams: {},
     };
+
+    const maybeInitState = (media_id: string) => {
+        // Initialize stream state if needed
+        if (!state.streams[media_id]) {
+            state.streams[media_id] = {}
+        }
+    }
 
     return async (msg: MessageEvent) => {
         // Broadcast to all clients
         const encoded = msg.data;
         const decoded = decode(encoded) as WorkerToServerMessage;
 
-        if (decoded.type === 'codec' || decoded.type === 'frame'
-            //  || decoded.type === 'object_detection'
-        ) {
+        if (decoded.type === 'codec' || decoded.type === 'frame') {
             // Forward to clients
             for (const [, client] of opts.clients) {
                 client.send(decoded);
             }
         }
 
-        // // Only for live streams (no file_name)
-        // if (decoded.type === 'object_detection' && decoded.file_name === undefined) {
-        //     // Also forward to webhook
-        //     opts.forward_to_webhook({
-        //         type: 'object_detection',
-        //         data: {
-        //             created_at: new Date().toISOString(),
-        //             media_id: decoded.media_id,
-        //             frame_id: decoded.frame_id,
-        //             objects: decoded.objects,
-        //         }
-        //     });
-        // }
 
-        // Occasionally, does indexing / object detection on the frame
+        const builders: {
+            [builder_id: string]: {
+                keys: string[],
+                interval: number,
+                should_run: (props: { in_moment: boolean, last_time_run: number }) => boolean,
+                write?: (media_id: string, media_unit_id: string, data: Uint8Array) => Promise<void>
+            }
+        } = {
+            'indexing': {
+                keys: ['vlm', 'embedding'],
+                interval: 3000,
+                should_run({ in_moment, last_time_run }) {
+                    if (in_moment) return true;
+                    const now = Date.now();
+
+                    // Ocassionally run every minute
+                    return now - last_time_run > 60000
+                },
+                async write(media_id: string, media_unit_id: string, data: Uint8Array) {
+                    // Write data to file
+                    const _path = path.join(FRAMES_DIR, `${media_unit_id}.jpg`);
+                    await Bun.write(_path, data);
+
+                    // Store in database
+                    const mu = {
+                        id: media_unit_id,
+                        type: 'frame',
+                        at_time: Date.now(), // Using timestamp instead of Date object
+                        description: null,
+                        embedding: null,
+                        media_id,
+                        path: _path,
+                    };
+
+                    await createMediaUnit(mu)
+                }
+            },
+            'object_detection': {
+                keys: ['object_detection'],
+                interval: 1000,
+                should_run({ in_moment }) {
+                    return true
+                },
+            },
+            'motion_energy': {
+                keys: ['motion_energy'],
+                interval: 1000,
+                should_run() {
+                    return true
+                },
+            }
+        }
+
+
         if (decoded.type === 'frame') {
+            const media_unit_id = randomUUID();
+            const msg: ServerToEngine = {
+                frame: decoded.data,
+                frame_id: media_unit_id,
+                media_id: decoded.media_id,
+                type: 'frame_binary',
+                workers: {}
+            }
+
+            const in_moment = opts.state().active_moments.has(decoded.media_id);
+            maybeInitState(decoded.media_id)
             const now = Date.now();
-            if (!state.streams[decoded.media_id]) {
-                state.streams[decoded.media_id] = {
-                    last_engine_sent__index: 0,
-                    last_engine_sent__object_detection: 0,
+            for (const [builder_id, builder] of Object.entries(builders)) {
+                const last_time_run = state.streams[decoded.media_id]![builder_id] ?? 0;
+                if (!builder.should_run({ in_moment, last_time_run })) continue;
+                if (now - last_time_run < builder.interval) continue;
+                state.streams[decoded.media_id]![builder_id] = now;
+
+                if (builder_id == 'indexing') {
+                    console.log('indexing ...', decoded.media_id)
+                }
+                await builder.write?.(decoded.media_id, media_unit_id, decoded.data)
+                for (const key of builder.keys) {
+                    msg.workers[key] = true;
                 }
             }
 
-            const frame_id = randomUUID();
-
-            (async () => {
-                // Forward to object detection worker if enabled
-                const object_detection_enabled = opts.settings()['object_detection_enabled'] === 'true';
-                if (!object_detection_enabled) return;
-                // Throttle engine forwarding to 1 fps
-                if (now - state.streams[decoded.media_id]!.last_engine_sent__object_detection < 1000) return;
-                state.streams[decoded.media_id]!.last_engine_sent__object_detection = now;
-
-                // logger.info({ path: decoded.path }, `Forwarding frame ${decoded.frame_id} from stream ${decoded.media_id} to object detection worker.`);
-
-                const msg: ServerToEngine = {
-                    type: "frame_binary",
-                    workers: {
-                        'object_detection': true,
-                    },
-                    media_id: decoded.media_id,
-                    frame_id,
-                    frame: decoded.data
-                }
+            if (Object.values(msg.workers).length > 0) {
                 opts.engine_conn().send(msg);
-            })();
-
-
-            (async () => {
-                // Throttle engine forwarding to 1 frame every 10 seconds
-                if (now - state.streams[decoded.media_id]!.last_engine_sent__index < 10000) return;
-                state.streams[decoded.media_id]!.last_engine_sent__index = now;
-
-                // Write data to file
-                const _path = path.join(FRAMES_DIR, `${frame_id}.jpg`);
-                await Bun.write(_path, decoded.data);
-
-                // Store in database
-                const mu = {
-                    id: frame_id,
-                    type: 'frame',
-                    at_time: Date.now(), // Using timestamp instead of Date object
-                    description: null,
-                    embedding: null,
-                    media_id: decoded.media_id,
-                    path: _path,
-                };
-
-                await createMediaUnit(mu)
-
-                // Forward to AI engine for 
-                // 1. Compute embedding  
-                // 2. VLM inference
-                const engine_conn = opts.engine_conn();
-
-                // Read the frame binary from the file
-                const msg: ServerToEngine = {
-                    type: "frame_binary",
-                    workers: {
-                        'vlm': true,
-                        'embedding': true,
-                    },
-                    media_id: decoded.media_id,
-                    frame_id,
-                    frame: decoded.data,
-                }
-                engine_conn.send(msg);
-            })();
+            }
         }
     }
-
 }

@@ -1,4 +1,5 @@
 import { createResource, For, Show } from "solid-js";
+import { FiImage } from "solid-icons/fi";
 import LayoutContent from "./LayoutContent";
 import type { Moment } from "../../shared/database";
 
@@ -49,9 +50,12 @@ export default function MomentsContent() {
                         </For>
                     </div>
                     <Show when={moments()?.length === 0}>
-                        <div class="flex flex-col items-center justify-center h-64 text-neu-500">
-                            <div class="text-lg mb-2">No moments found</div>
-                            <div class="text-sm">Events detected in your streams will appear here</div>
+                        <div class="h-full flex items-center justify-center text-neu-500">
+                            <div>
+                                <FiImage class="mb-4 w-12 h-12" />
+                                <p>No moments found</p>
+                                <p>Events detected in your streams will appear here</p>
+                            </div>
                         </div>
                     </Show>
                 </Show>
