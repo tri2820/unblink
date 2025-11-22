@@ -112,56 +112,11 @@ export async function initDatabase(client: Database) {
                 type TEXT,
                 title TEXT,
                 short_description TEXT,
-                long_description TEXT
+                long_description TEXT,
+                clip_path TEXT
             );
         `);
         logger.info("Table 'moments' created.");
-    } else {
-        // Migration: Check and add new columns if they don't exist
-        const columnsResult = await client.prepare("PRAGMA table_info(moments)").all();
-        const columnNames = new Set((columnsResult as any[]).map((row: any) => row.name));
-
-        // Ensure media_id exists
-        if (!columnNames.has('media_id')) {
-            await client.exec("ALTER TABLE moments ADD COLUMN media_id TEXT");
-            logger.info("Column 'media_id' added to 'moments' table.");
-        }
-
-        // Add new columns if missing
-        if (!columnNames.has('start_time') && columnNames.has('from_time')) {
-            await client.exec("ALTER TABLE moments RENAME COLUMN from_time TO start_time");
-            logger.info("Column 'from_time' renamed to 'start_time' in 'moments' table.");
-        }
-
-        if (!columnNames.has('end_time') && columnNames.has('to_time')) {
-            await client.exec("ALTER TABLE moments RENAME COLUMN to_time TO end_time");
-            logger.info("Column 'to_time' renamed to 'end_time' in 'moments' table.");
-        }
-
-        if (!columnNames.has('peak_deviation')) {
-            await client.exec("ALTER TABLE moments ADD COLUMN peak_deviation REAL");
-            logger.info("Column 'peak_deviation' added to 'moments' table.");
-        }
-
-        if (!columnNames.has('type')) {
-            await client.exec("ALTER TABLE moments ADD COLUMN type TEXT");
-            logger.info("Column 'type' added to 'moments' table.");
-        }
-
-        if (!columnNames.has('title')) {
-            await client.exec("ALTER TABLE moments ADD COLUMN title TEXT");
-            logger.info("Column 'title' added to 'moments' table.");
-        }
-
-        if (!columnNames.has('short_description')) {
-            await client.exec("ALTER TABLE moments ADD COLUMN short_description TEXT");
-            logger.info("Column 'short_description' added to 'moments' table.");
-        }
-
-        if (!columnNames.has('long_description')) {
-            await client.exec("ALTER TABLE moments ADD COLUMN long_description TEXT");
-            logger.info("Column 'long_description' added to 'moments' table.");
-        }
     }
 }
 

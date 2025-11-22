@@ -72,7 +72,7 @@ export function calculateFrameStats(
     timestamp: number,
     onMoment?: MomentCallback,
     onMaybeMomentStart?: () => void,
-    onMaybeMomentEnd?: () => void
+    onMaybeMomentEnd?: (isMoment: boolean) => void
 ): FrameStats {
     let streamStats = streamStatsMap.get(media_id);
     if (!streamStats) {
@@ -167,7 +167,7 @@ export function calculateFrameStats(
                 state.active = false;
                 state.frameIds = [];
                 state.peakDeviation = 0;
-                onMaybeMomentEnd?.();
+                onMaybeMomentEnd?.(isStandardMoment || isInstantEvent);
             }
         }
     }

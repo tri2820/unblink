@@ -54,4 +54,5 @@ export interface Moment {
     title?: string | null;
     short_description?: string | null;
     long_description?: string | null;
+    clip_path?: string | null;
 }

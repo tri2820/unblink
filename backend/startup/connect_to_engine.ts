@@ -129,8 +129,8 @@ export function connect_to_engine(props: {
                         state.active_moments.add(decoded.media_id);
                     },
                     // onMaybeMomentEnd
-                    () => {
-                        logger.info(`Maybe moment ended for ${decoded.media_id}`);
+                    (isMoment) => {
+                        logger.info(`Maybe moment ended for ${decoded.media_id}. Was moment: ${isMoment}`);
                         state.active_moments.delete(decoded.media_id);
                     }
                 );
