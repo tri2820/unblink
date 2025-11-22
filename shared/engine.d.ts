@@ -1,5 +1,6 @@
 export type ServerRegistrationMessage = {
     type: "i_am_server";
+    version: string;
     token?: string;
 }
 
@@ -12,6 +13,16 @@ export type ServerToEngine =
         frame_id: string;
         media_id: string;
         frame: Uint8Array;
+    } | {
+        type: "moment_enrichment",
+        media_id: string;
+        moment_id: string;
+        media_units: {
+            id: string;
+            at_time: number;
+            data: Uint8Array;
+            type: 'frame'
+        }[]
     }
 
 export type DetectionObject = {
@@ -41,9 +52,14 @@ export type EngineToServer = {
     frame_id: string;
     objects: DetectionObject[];
 } | {
-    type: "media_summary",
+    type: "moment_enrichment",
     media_id: string;
-    summary: Summary
+    moment_id: string;
+    enrichment: {
+        title: string;
+        short_description: string;
+        long_description: string;
+    }
 } | FrameMotionEnergyMessage
 
 export type FrameMotionEnergyMessage = {

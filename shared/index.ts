@@ -153,4 +153,5 @@ export type ServerEphemeralState = {
         };
     }>;
     active_moments: Set<string>;
+    moment_frames: Map<string, { id: string, at_time: number, data: Uint8Array }[]>;
 };

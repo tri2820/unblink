@@ -482,6 +482,12 @@ export async function getFirstMediaUnitInTimeRange(mediaId: string, startTime: n
     return await stmt.get(mediaId, startTime, endTime) as MediaUnit | undefined;
 }
 
+export async function getDescribedMediaUnitsInTimeRange(mediaId: string, startTime: number, endTime: number): Promise<MediaUnit[]> {
+    const db = await getDb();
+    const stmt = db.prepare('SELECT * FROM media_units WHERE media_id = ? AND at_time >= ? AND at_time <= ? AND description IS NOT NULL ORDER BY at_time ASC');
+    return await stmt.all(mediaId, startTime, endTime) as MediaUnit[];
+}
+
 // Moment utilities
 export async function getMomentById(id: string): Promise<Moment | undefined> {
     const db = await getDb();

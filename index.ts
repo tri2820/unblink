@@ -44,6 +44,7 @@ const state: ServerEphemeralState = {
     frame_stats_messages: [],
     stream_stats_map: new Map(),
     active_moments: new Set(),
+    moment_frames: new Map(),
 }
 const engine_conn = connect_to_engine({
     ENGINE_URL,
