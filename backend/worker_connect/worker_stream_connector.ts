@@ -16,7 +16,6 @@ export async function start_streams(opts: {
                     worker: opts.worker_stream,
                     media_id: media.id,
                     uri: media.uri,
-                    saveToDisk: Boolean(media.saveToDisk),
                     saveDir: media.saveDir || '',
                 });
             }
@@ -26,12 +25,11 @@ export async function start_streams(opts: {
     }
 }
 
-export function start_stream(opts: Omit<ServerToWorkerStreamMessage_Add_Stream, 'type'> & { worker: Worker, saveToDisk: boolean, saveDir: string }) {
+export function start_stream(opts: Omit<ServerToWorkerStreamMessage_Add_Stream, 'type'> & { worker: Worker, saveDir: string }) {
     const start_msg: ServerToWorkerStreamMessage = {
         type: 'start_stream',
         media_id: opts.media_id,
         uri: opts.uri,
-        saveToDisk: opts.saveToDisk,
         saveDir: opts.saveDir,
     }
 
@@ -60,4 +58,22 @@ export function stop_stream(opts: {
     }
 
     opts.worker.postMessage(stop_msg);
+}
+
+export function set_moment_state(opts: {
+    worker: Worker,
+    media_id: string,
+    should_write_moment: boolean,
+    current_moment_id?: string,
+    delete_on_close?: boolean,
+}) {
+    const msg: ServerToWorkerStreamMessage = {
+        type: 'set_moment_state',
+        media_id: opts.media_id,
+        should_write_moment: opts.should_write_moment,
+        current_moment_id: opts.current_moment_id,
+        delete_on_close: opts.delete_on_close,
+    }
+
+    opts.worker.postMessage(msg);
 }

@@ -68,13 +68,17 @@ export type WorkerStreamToServerMessage = (StreamMessage & { media_id: string, f
 } | {
     type: 'starting';
     media_id: string;
+} | {
+    type: 'moment_clip_saved';
+    media_id: string;
+    moment_id: string;
+    clip_path: string;
 }
 
 export type ServerToWorkerStreamMessage_Add_Stream = {
     type: 'start_stream',
     media_id: string,
     uri: string,
-    saveToDisk: boolean,
     saveDir: string,
 }
 export type ServerToWorkerStreamMessage_Add_File = {
@@ -86,6 +90,12 @@ export type ServerToWorkerStreamMessage = ServerToWorkerStreamMessage_Add_Stream
     type: 'stop_stream',
     media_id: string,
     file_name?: string,
+} | {
+    type: 'set_moment_state',
+    media_id: string,
+    should_write_moment: boolean,
+    current_moment_id?: string,
+    delete_on_close?: boolean,
 }
 
 // export type ServerToWorkerObjectDetectionMessage = {

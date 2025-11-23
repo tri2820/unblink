@@ -4,9 +4,14 @@ import type { ServerToWorkerStreamMessage, WorkerStreamToServerMessage } from ".
 import { RECORDINGS_DIR } from "../appdir";
 import { logger } from "../logger";
 import { streamMedia, type StartStreamArg } from "../stream/index";
+import type { WorkerState } from "./worker_state";
 declare var self: Worker;
 
 logger.info("Worker 'stream' started");
+
+const workerState: WorkerState = {
+    streams: new Map(),
+};
 
 const loops: {
     [loop_id: string]: {
@@ -40,7 +45,7 @@ async function startStream(stream: StartStreamArg, signal: AbortSignal) {
         }
 
         sendMessage(worker_msg);
-    }, signal);
+    }, signal, () => workerState);
 }
 
 async function startFaultTolerantStream(stream: StartStreamArg, signal: AbortSignal) {
@@ -80,6 +85,12 @@ self.addEventListener("message", async (event) => {
         if (msg.uri) {
             const abortController = new AbortController();
             const loop_id = msg.media_id;
+
+            // Initialize state for this stream in global workerState
+            workerState.streams.set(msg.media_id, {
+                should_write_moment: false,
+            });
+
             loops[loop_id] = {
                 controller: abortController,
             };
@@ -87,7 +98,6 @@ self.addEventListener("message", async (event) => {
             startFaultTolerantStream({
                 id: msg.media_id,
                 uri: msg.uri,
-                write_to_file: msg.saveToDisk,
                 save_location: msg.saveDir,
             }, abortController.signal);
         }
@@ -98,6 +108,12 @@ self.addEventListener("message", async (event) => {
         logger.info(`Starting file stream ${msg.media_id} for file ${msg.file_name}`);
         const abortController = new AbortController();
         const loop_id = `${msg.media_id}::${msg.file_name}`;
+
+        // Initialize state for this stream in global workerState
+        workerState.streams.set(msg.media_id, {
+            should_write_moment: false,
+        });
+
         loops[loop_id] = {
             controller: abortController,
         };
@@ -108,7 +124,6 @@ self.addEventListener("message", async (event) => {
                 id: msg.media_id,
                 uri,
                 file_name: msg.file_name,
-                write_to_file: false,
             }, abortController.signal);
         } catch (error) {
             logger.error(error, `Error starting file stream for ${msg.media_id} file ${msg.file_name}`);
@@ -120,6 +135,31 @@ self.addEventListener("message", async (event) => {
         // Stop the stream and clean up resources
         const loop_id = msg.file_name ? `${msg.media_id}::${msg.file_name}` : msg.media_id;
         loops[loop_id]?.controller.abort();
+
+        // Clean up state for this stream
+        workerState.streams.delete(msg.media_id);
+    }
+
+    if (msg.type === 'set_moment_state') {
+        logger.info({
+            media_id: msg.media_id,
+            should_write_moment: msg.should_write_moment,
+            moment_id: msg.current_moment_id,
+            delete_on_close: msg.delete_on_close,
+        }, 'Setting moment state');
+
+        const streamState = workerState.streams.get(msg.media_id);
+        if (streamState) {
+            streamState.should_write_moment = msg.should_write_moment;
+            streamState.current_moment_id = msg.current_moment_id;
+            streamState.delete_on_close = msg.delete_on_close;
+        } else {
+            // Initialize if doesn't exist
+            workerState.streams.set(msg.media_id, {
+                should_write_moment: msg.should_write_moment,
+                current_moment_id: msg.current_moment_id,
+                delete_on_close: msg.delete_on_close,
+            });
+        }
     }
 });
-

@@ -46,11 +46,22 @@ const state: ServerEphemeralState = {
     active_moments: new Set(),
     moment_frames: new Map(),
 }
+const handleMessage = createForwardFunction({
+    clients,
+    settings,
+    engine_conn: () => engine_conn,
+    forward_to_webhook,
+    state: () => state,
+})
+
+const worker_stream = await spawn_worker('worker_stream.js', handleMessage);
+
 const engine_conn = connect_to_engine({
     ENGINE_URL,
     state: () => state,
     clients: () => clients,
     forward_to_webhook,
+    worker_stream,
 });
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
@@ -187,7 +198,6 @@ const server = Bun.serve({
                     worker: worker_stream,
                     media_id: id,
                     uri: uri as string,
-                    saveToDisk: saveToDisk as boolean,
                     saveDir: saveDir as string,
                 });
 
@@ -489,15 +499,6 @@ const server = Bun.serve({
 
 logger.info(`Server running on ${HOSTNAME}:${PORT}`);
 
-const handleMessage = createForwardFunction({
-    clients,
-    settings,
-    engine_conn: () => engine_conn,
-    forward_to_webhook,
-    state: () => state,
-})
-
-const worker_stream = await spawn_worker('worker_stream.js', handleMessage);
 
 if (process.env.DEV_MODE === 'lite') {
     logger.info("Running in lite development mode - skipping stream startup");

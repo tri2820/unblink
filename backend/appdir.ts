@@ -20,6 +20,7 @@ export const DATABASE_EMBEDDING_DIMENSION = 2048;
 export const FILES_DIR = path.join(RUNTIME_DIR, 'files');
 export const FRAMES_DIR = path.join(FILES_DIR, 'frames');
 export const RECORDINGS_DIR = path.join(FILES_DIR, 'recordings');
+export const MOMENTS_DIR = path.join(FILES_DIR, 'moments');
 
 // Create directories if they don't exist
 await ensureDirExists(RUNTIME_DIR);

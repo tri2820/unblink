@@ -8,6 +8,7 @@ import { createMoment, getMediaUnitById, updateMediaUnit, updateMoment } from ".
 import { logger } from "../logger";
 import { calculateFrameStats, type MomentData } from "../utils/frame_stats";
 import { handleMoment } from "../utils/handle_moment";
+import { set_moment_state } from "../worker_connect/worker_stream_connector";
 import type { WsClient } from "../WsClient";
 
 
@@ -16,6 +17,7 @@ export function connect_to_engine(props: {
     ENGINE_URL: string,
     forward_to_webhook: (msg: WebhookMessage) => Promise<void>,
     clients: () => Map<ServerWebSocket, WsClient>,
+    worker_stream: Worker,
 }) {
     const engine_conn = new Conn<ServerRegistrationMessage | ServerToEngine, EngineToServer>(`wss://${props.ENGINE_URL}/ws`, {
         onOpen() {
@@ -127,11 +129,27 @@ export function connect_to_engine(props: {
                     () => {
                         logger.info(`Maybe moment started for ${decoded.media_id}`);
                         state.active_moments.add(decoded.media_id);
+
+                        // Forward to worker to start recording moment clip
+                        set_moment_state({
+                            worker: props.worker_stream,
+                            media_id: decoded.media_id,
+                            should_write_moment: true,
+                        });
                     },
                     // onMaybeMomentEnd
                     (isMoment) => {
                         logger.info(`Maybe moment ended for ${decoded.media_id}. Was moment: ${isMoment}`);
                         state.active_moments.delete(decoded.media_id);
+
+                        // Forward to worker to stop recording moment clip
+                        // If it wasn't actually a moment, tell worker to delete the file
+                        set_moment_state({
+                            worker: props.worker_stream,
+                            media_id: decoded.media_id,
+                            should_write_moment: false,
+                            delete_on_close: !isMoment, // Delete if it was NOT a real moment
+                        });
                     }
                 );
 

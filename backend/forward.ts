@@ -7,7 +7,7 @@ import type { WebhookMessage } from "~/shared/alert";
 import type { Conn } from "~/shared/Conn";
 import type { EngineToServer, ServerToEngine } from "~/shared/engine";
 import { FRAMES_DIR } from "./appdir";
-import { createMediaUnit } from "./database/utils";
+import { createMediaUnit, updateMoment } from "./database/utils";
 import type { WsClient } from "./WsClient";
 
 import type { ServerEphemeralState } from "~/shared";
@@ -45,6 +45,19 @@ export const createForwardFunction = (opts: ForwardingOpts) => {
         // Broadcast to all clients
         const encoded = msg.data;
         const decoded = decode(encoded) as WorkerToServerMessage;
+
+        // Handle moment clip saved message
+        if (decoded.type === 'moment_clip_saved') {
+            logger.info({ moment_id: decoded.moment_id, clip_path: decoded.clip_path }, 'Moment clip saved, updating database');
+            try {
+                await updateMoment(decoded.moment_id, {
+                    clip_path: decoded.clip_path,
+                });
+            } catch (error) {
+                logger.error({ error, moment_id: decoded.moment_id }, 'Failed to update moment with clip path');
+            }
+            return; // Don't forward this message to clients
+        }
 
         if (decoded.type === 'codec' || decoded.type === 'frame') {
             // Forward to clients

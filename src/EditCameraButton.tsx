@@ -104,23 +104,21 @@ export default function EditCameraButton(props: { camera: Camera, children: any 
                     placeholder='Outside, Security, Front Door'
                     type="text" id="camera-labels" class="px-3 py-1.5 mt-1 block w-full rounded-lg bg-neu-850 border border-neu-750 text-white focus:outline-none placeholder:text-neu-500" />
             </div>
-            <div class="flex items-center justify-between">
+            {/* <div class="flex items-center justify-between">
                 <ArkSwitch
                     checked={saveToDisk}
                     onCheckedChange={(details) => setSaveToDisk(details.checked)}
                     label="Save to Disk"
                 />
+            </div> */}
+            <div>
+                <label for="save-dir" class="text-sm font-medium text-neu-300">Video Directory</label>
+                <input
+                    value={saveDir()}
+                    onInput={(e: Event & { currentTarget: HTMLInputElement }) => setsaveDir(e.currentTarget.value)}
+                    placeholder='/path/to/recordings'
+                    type="text" id="save-dir" class="px-3 py-1.5 mt-1 block w-full rounded-lg bg-neu-850 border border-neu-750 text-white focus:outline-none placeholder:text-neu-500" />
             </div>
-            <Show when={saveToDisk()}>
-                <div>
-                    <label for="save-dir" class="text-sm font-medium text-neu-300">Save Directory (optional)</label>
-                    <input
-                        value={saveDir()}
-                        onInput={(e: Event & { currentTarget: HTMLInputElement }) => setsaveDir(e.currentTarget.value)}
-                        placeholder='/path/to/recordings'
-                        type="text" id="save-dir" class="px-3 py-1.5 mt-1 block w-full rounded-lg bg-neu-850 border border-neu-750 text-white focus:outline-none placeholder:text-neu-500" />
-                </div>
-            </Show>
             <div class="flex justify-end pt-4">
                 {/* There should be no asChild here */}
                 <Dialog.CloseTrigger>

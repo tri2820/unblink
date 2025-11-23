@@ -1,4 +1,5 @@
 import fs from "fs/promises";
+import type { WorkerState } from "~/backend/worker/worker_state";
 import type { AVPixelFormat, AVSampleFormat, Frame, Packet, Stream } from "node-av";
 import {
     AV_CODEC_ID_AAC,
@@ -40,14 +41,12 @@ import {
 } from "node-av";
 import path from "path";
 import { v4 as uuid } from 'uuid';
-import { FRAMES_DIR, RECORDINGS_DIR } from "~/backend/appdir";
+import { FRAMES_DIR, MOMENTS_DIR, RECORDINGS_DIR } from "~/backend/appdir";
 import { logger as _logger } from "~/backend/logger";
 import type { StreamMessage } from "~/shared";
 
 const logger = _logger.child({ worker: 'stream' });
 const MAX_SIZE = 720;
-const OUTPUT_ROLLING_INTERVAL_MS = 3600 * 1000; // 1 hour
-// const OUTPUT_ROLLING_INTERVAL_MS = 60 * 1000; // 1 min for testing
 
 function getCodecs(
     width: number,
@@ -147,6 +146,7 @@ function shouldSkipTranscode(videoStream: Stream): boolean {
 }
 
 type OutputFileObject = {
+    output_id: string;
     from: Date;
     mediaOutput: MediaOutput;
     videoFileOutputIndex: number;
@@ -154,26 +154,60 @@ type OutputFileObject = {
 };
 
 class OutputFile {
-    static async create(mediaId: string, videoEncoder: Encoder, saveDir?: string): Promise<OutputFileObject> {
+    static async create(mediaId: string, output_id: string, videoEncoder: Encoder, output_type_dir: string): Promise<OutputFileObject> {
         const from = new Date();
-        const dir = saveDir ? path.join(saveDir, mediaId) : `${RECORDINGS_DIR}/${mediaId}`;
+        const dir = path.join(output_type_dir, mediaId);
         await fs.mkdir(dir, { recursive: true });
-        const filePath = path.join(dir, `from_${from.getTime()}_ms.mkv`);
+        const filePath = path.join(dir, `${mediaId}_from_${from.getTime()}_ms.mkv`);
+
         const mediaOutput = await MediaOutput.open(filePath, {
-            format: 'matroska',  // Always use Matroska/MKV
+            format: 'matroska',
         });
-        const videoFileOutputIndex = mediaOutput.addStream(videoEncoder);
-        return { from, mediaOutput, videoFileOutputIndex, path: filePath };
+
+        // Manually add stream to bypass addStream's check on initialized encoders
+        const stream = mediaOutput.getFormatContext().newStream(null);
+        if (!stream) {
+            throw new Error("Failed to create output stream");
+        }
+
+        const codecContext = videoEncoder.getCodecContext();
+        if (!codecContext) {
+            throw new Error("Encoder codec context not available");
+        }
+
+        // Copy codec parameters
+        stream.codecpar.fromContext(codecContext);
+        stream.timeBase = codecContext.timeBase;
+
+        // Write header immediately
+        await mediaOutput.getFormatContext().writeHeader();
+
+        return { output_id, from, mediaOutput, videoFileOutputIndex: stream.index, path: filePath };
     }
 
-    static async close(obj: OutputFileObject) {
+    static async close(obj: OutputFileObject): Promise<string> {
+        // Manually write trailer since we bypassed MediaOutput's internal state
+        await obj.mediaOutput.getFormatContext().writeTrailer();
         await obj.mediaOutput.close();
+
         // Rename to have closed_at timestamp
         const to = new Date();
-        const newName = `from_${obj.from.getTime()}_ms_to_${to.getTime()}_ms.mkv`;
+        const newName = `${path.basename(obj.path).split('_')[1]}_from_${obj.from.getTime()}_ms_to_${to.getTime()}_ms.mkv`;
         const newPath = path.join(path.dirname(obj.path), newName);
         await fs.rename(obj.path, newPath);
         logger.info({ old: obj.path, new: newPath }, "Closed output file");
+        return newPath;
+    }
+
+    static async discard(obj: OutputFileObject) {
+        // Just close without writing trailer since we are deleting
+        await obj.mediaOutput.close();
+        try {
+            await fs.unlink(obj.path);
+            logger.info({ path: obj.path }, "Deleted false alarm moment file");
+        } catch (error) {
+            logger.error({ error, path: obj.path }, "Failed to delete false alarm moment file");
+        }
     }
 }
 
@@ -183,11 +217,15 @@ export type StartStreamArg = {
     id: string;
     file_name?: string;
     uri: string;
-    write_to_file?: boolean;
     save_location?: string;
 }
 
-export async function streamMedia(stream: StartStreamArg, onMessage: (msg: StreamMessage) => void, signal: AbortSignal) {
+export async function streamMedia(
+    stream: StartStreamArg,
+    onMessage: (msg: StreamMessage) => void,
+    signal: AbortSignal,
+    state$: () => WorkerState
+) {
     logger.info({ uri: stream.uri }, 'Starting streamMedia for');
 
     logger.info(`Opening media input: ${stream.uri}`);
@@ -284,6 +322,7 @@ export async function streamMedia(stream: StartStreamArg, onMessage: (msg: Strea
         bitrate: '2M',
         options: {
             strict: 'experimental',
+            flags: 'global_header',
         },
     });
 
@@ -296,33 +335,16 @@ export async function streamMedia(stream: StartStreamArg, onMessage: (msg: Strea
         onMessage(frame_msg);
     }
 
-    // let last_save_time = 0;
-    // async function saveFrameForObjectDetection(encodedData: Uint8Array) {
-    //     const now = Date.now();
-    //     if (now - last_save_time < 1000) return;
-    //     last_save_time = now;
-
-    // const frame_id = uuid()
-    // const _path = path.join(FRAMES_DIR, `${frame_id}.jpg`);
-    // await Bun.write(_path, encodedData);
-
-    // const frame_file_msg: StreamMessage = {
-    //     type: "frame_file",
-    //     frame_id,
-    //     path: _path,
-    // };
-    // onMessage(frame_file_msg);
-    // }
-
-
-
     async function writeToOutputFile(packet: Packet, output: OutputFileObject) {
         // Write to file output
         using cloned = packet.clone();
-        if (cloned) await output.mediaOutput.writePacket(cloned, output.videoFileOutputIndex);
+        if (cloned) {
+            cloned.streamIndex = output.videoFileOutputIndex;
+            await output.mediaOutput.getFormatContext().interleavedWriteFrame(cloned);
+        }
     }
 
-    async function processPacket(packet: Packet, decodedFrame: Frame, output: OutputFileObject | null) {
+    async function processPacket(packet: Packet, decodedFrame: Frame) {
         let filteredFrame: Frame | null = null;
 
         try {
@@ -341,7 +363,7 @@ export async function streamMedia(stream: StartStreamArg, onMessage: (msg: Strea
                 using encodedPacket = await videoEncoder.encode(frameToUse);
                 if (encodedPacket?.data) {
                     // await saveFrameForObjectDetection(encodedPacket.data);
-                    if (output) await writeToOutputFile(encodedPacket, output);
+                    if (momentOutput) await writeToOutputFile(encodedPacket, momentOutput);
                 }
             } else {
                 // Encode once and reuse for both streaming and object detection
@@ -349,7 +371,8 @@ export async function streamMedia(stream: StartStreamArg, onMessage: (msg: Strea
                 if (encodedPacket?.data) {
                     await sendFrameMessage(encodedPacket);
                     // await saveFrameForObjectDetection(encodedPacket.data);
-                    if (output) await writeToOutputFile(encodedPacket, output);
+                    // Write same packet to moment output if it exists
+                    if (momentOutput) await writeToOutputFile(encodedPacket, momentOutput);
                 }
             }
         } finally {
@@ -363,7 +386,7 @@ export async function streamMedia(stream: StartStreamArg, onMessage: (msg: Strea
 
     logger.info("Entering main streaming loop");
 
-    let output = null;
+    let momentOutput: OutputFileObject | null = null;
 
     while (true) {
         const res = await raceWithTimeout(packets.next(), signal, 10000);
@@ -375,21 +398,49 @@ export async function streamMedia(stream: StartStreamArg, onMessage: (msg: Strea
 
         const packet = res.value;
 
-        if (stream.write_to_file) {
-            // Initialize rolling file output on first video packet
-            // Or if it has been 1 hour since last output creation
-            const now = Date.now();
-            if (
-
-                output === null || (now - output.from.getTime() >= OUTPUT_ROLLING_INTERVAL_MS)) {
-                if (output) {
-                    logger.info("Closing previous file output due to rolling interval");
-                    await OutputFile.close(output);
+        // Handle moment-specific output
+        const streamState = state$().streams.get(stream.id);
+        if (streamState?.should_write_moment) {
+            // Check if we need to create a new moment output (new moment started)
+            const currentMomentId = streamState.current_moment_id || 'unknown';
+            if (momentOutput === null || momentOutput.output_id !== currentMomentId) {
+                // Close previous moment output if exists
+                if (momentOutput) {
+                    logger.info({ output_id: momentOutput.output_id }, "Closing previous moment output");
+                    await OutputFile.close(momentOutput);
                 }
 
-                output = await OutputFile.create(stream.id, videoEncoder, stream.save_location);
-                logger.info({ path: output.path }, "Created new rolling output file");
+                // Create new moment output with moment_id in path
+                const momentId: string = currentMomentId;
+
+                momentOutput = await OutputFile.create(stream.id, momentId, videoEncoder, stream.save_location || MOMENTS_DIR);
+                logger.info({ path: momentOutput.path, output_id: momentId }, "Created new moment output file");
             }
+        } else if (momentOutput !== null) {
+            // should_write_moment is false - close the moment output
+            const shouldDelete = streamState?.delete_on_close === true;
+            const outputId = momentOutput.output_id;
+
+            if (shouldDelete) {
+                logger.info({ output_id: outputId }, "Moment was false alarm, closing and deleting output");
+                await OutputFile.discard(momentOutput);
+            } else {
+                // Real moment - close, rename, and notify with final path
+                const finalPath = await OutputFile.close(momentOutput);
+                logger.info({ output_id: outputId, final_path: finalPath }, "Moment ended, closing and notifying with final path");
+
+                // Send message to server with the final clip path
+                if (outputId && outputId !== 'unknown') {
+                    onMessage({
+                        type: 'moment_clip_saved' as any,
+                        media_id: stream.id,
+                        moment_id: outputId,
+                        clip_path: finalPath,
+                    } as any);
+                }
+            }
+
+            momentOutput = null;
         }
 
         if (packet.streamIndex === videoStream.index) {
@@ -409,7 +460,7 @@ export async function streamMedia(stream: StartStreamArg, onMessage: (msg: Strea
             last_send_time = now;
 
             try {
-                await processPacket(packet, decodedFrame, output);
+                await processPacket(packet, decodedFrame);
             } catch (error) {
                 logger.error({ error: (error as Error).message }, "Error processing packet");
             } finally {
@@ -419,6 +470,12 @@ export async function streamMedia(stream: StartStreamArg, onMessage: (msg: Strea
         } else {
             packet.free();
         }
+    }
+
+    // Clean up moment output if still open
+    if (momentOutput) {
+        logger.info("Closing moment output at stream end");
+        await OutputFile.close(momentOutput);
     }
 
     logger.info("Streaming loop ended");

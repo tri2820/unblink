@@ -79,6 +79,7 @@ export type Moment = {
     title?: string | null;
     short_description?: string | null;
     long_description?: string | null;
+    clip_path?: string | null;
 }
 export type Summary = {
     background: string;
