@@ -192,7 +192,8 @@ class OutputFile {
 
         // Rename to have closed_at timestamp
         const to = new Date();
-        const newName = `${path.basename(obj.path).split('_')[1]}_from_${obj.from.getTime()}_ms_to_${to.getTime()}_ms.mkv`;
+        const mediaId = path.basename(obj.path).split('_from_')[0];
+        const newName = `${mediaId}_from_${obj.from.getTime()}_ms_to_${to.getTime()}_ms.mkv`;
         const newPath = path.join(path.dirname(obj.path), newName);
         await fs.rename(obj.path, newPath);
         logger.info({ old: obj.path, new: newPath }, "Closed output file");
