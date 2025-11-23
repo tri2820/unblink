@@ -9,7 +9,6 @@ import { getStreamColor } from "./utils/colors";
 type MotionCanvasProps = {
     viewedMedias: () => {
         media_id: string;
-        file_name?: string | undefined;
     }[];
     cameras: () => { id: string; name: string }[];
 }
@@ -38,10 +37,8 @@ function MotionCanvas(props: MotionCanvasProps) {
         // Collect all messages for viewed streams
         const allMessages: FrameStatsMessage[] = [];
         for (const media of props.viewedMedias()) {
-            if (!media.file_name) { // Only live streams
-                const messages = statsMessages[media.media_id] || [];
-                allMessages.push(...messages);
-            }
+            const messages = statsMessages[media.media_id] || [];
+            allMessages.push(...messages);
         }
 
         // Sort by timestamp to interleave messages from different streams
@@ -178,7 +175,6 @@ function MotionCanvas(props: MotionCanvasProps) {
 export default function ActivityBar(props: {
     viewedMedias: () => {
         media_id: string;
-        file_name?: string | undefined;
     }[];
     cameras: () => { id: string; name: string }[];
 }) {
@@ -189,7 +185,6 @@ export default function ActivityBar(props: {
     const getStreamInfo = () => {
         const streams: { name: string, color: string, latestValue: number | null }[] = [];
         for (const media of props.viewedMedias()) {
-            if (media.file_name) continue;
             const colors = getStreamColor(media.media_id);
             const camera = props.cameras().find(c => c.id === media.media_id);
 

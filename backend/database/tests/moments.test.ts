@@ -168,3 +168,24 @@ test("Get moments by media ID", async () => {
     await deleteMoment(momentId1);
     await deleteMoment(momentId2);
 });
+
+test("Create moment with thumbnail path", async () => {
+    const momentId = crypto.randomUUID();
+    const thumbnailPath = "/tmp/thumbnail.jpg";
+    await createMoment({
+        id: momentId,
+        media_id: testMediaId,
+        start_time: Date.now(),
+        end_time: Date.now(),
+        peak_deviation: 1.0,
+        type: 'standard',
+        title: null,
+        short_description: null,
+        long_description: null,
+        thumbnail_path: thumbnailPath
+    });
+    const moment = await getMomentById(momentId);
+    expect(moment).toBeDefined();
+    expect(moment?.thumbnail_path).toBe(thumbnailPath);
+    await deleteMoment(momentId);
+});

@@ -2,6 +2,8 @@ import { randomUUID } from "crypto";
 import type { ServerEphemeralState } from "~/shared";
 import type { Conn } from "~/shared/Conn";
 import type { EngineToServer, ServerRegistrationMessage, ServerToEngine } from "~/shared/engine";
+import path from "path";
+import { FRAMES_DIR } from "../appdir";
 import { createMoment } from "../database/utils";
 import { logger } from "../logger";
 import type { MomentData } from "./frame_stats";
@@ -17,6 +19,23 @@ export async function handleMoment(
     const momentId = randomUUID();
 
     try {
+        // Save thumbnail
+        let thumbnailPath: string | null = null;
+        const momentFrames = state.moment_frames.get(moment.media_id) || [];
+
+        if (momentFrames.length > 0) {
+            // Use middle frame as thumbnail
+            const middleIndex = Math.floor(momentFrames.length / 2);
+            const thumbnailFrame = momentFrames[middleIndex];
+
+            if (thumbnailFrame) {
+                const filename = `${momentId}.jpg`;
+                thumbnailPath = path.join(FRAMES_DIR, filename);
+                await Bun.write(thumbnailPath, thumbnailFrame.data);
+                logger.info({ thumbnailPath }, "Saved moment thumbnail");
+            }
+        }
+
         await createMoment({
             id: momentId,
             media_id: moment.media_id,
@@ -27,11 +46,12 @@ export async function handleMoment(
             title: null,
             short_description: null,
             long_description: null,
+            thumbnail_path: thumbnailPath,
         });
         logger.info(`Saved moment to database for media ${moment.media_id}`);
 
         // Trigger summarization
-        const momentFrames = state.moment_frames.get(moment.media_id) || [];
+        // momentFrames is already defined above
         if (momentFrames.length > 0) {
             const msg: ServerToEngine = {
                 type: 'moment_enrichment',

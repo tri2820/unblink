@@ -62,7 +62,7 @@ export default function ViewContent() {
 
             setSubscription({
                 session_id,
-                streams: medias.map(media => ({ id: media.media_id, file_name: media.file_name })),
+                streams: medias.map(media => ({ id: media.media_id })),
             });
         } else {
             setSubscription();
@@ -125,9 +125,7 @@ export default function ViewContent() {
         setSubscription();
     });
 
-    const some_media_is_live = () => {
-        return viewedMedias().some(media => !media.file_name);
-    }
+
 
     return (
         <div class="flex items-start h-screen">
@@ -167,7 +165,6 @@ export default function ViewContent() {
                                                     return <div style={{ width: `calc((100% - (${cols() - 1} * ${GAP_SIZE})) / ${cols()})`, height: '100%' }}>
                                                         <CanvasVideo
                                                             media_id={media.media_id}
-                                                            file_name={media.file_name}
                                                             showDetections={showDetections}
                                                             camera_name={cameras().find(c => c.id === media.media_id)?.name}
                                                         />
@@ -182,51 +179,45 @@ export default function ViewContent() {
                     </Show>
                 </div>
 
-                <Show when={some_media_is_live()}>
-
-                    <ActivityBar viewedMedias={viewedMedias} cameras={cameras} />
-
-                </Show>
+                <ActivityBar viewedMedias={viewedMedias} cameras={cameras} />
             </div>
 
-            <Show when={some_media_is_live()}>
-                <div
-                    data-show={agentBar.showAgentBar()}
-                    class="flex-none data-[show=true]:w-xl w-0 h-screen transition-[width] duration-300 ease-in-out overflow-hidden  flex flex-col">
-                    <div class="border-l border-neu-800 bg-neu-900 shadow-2xl rounded-2xl flex-1 mr-2 my-2 flex flex-col h-full overflow-hidden">
-                        <div class="h-14 flex items-center p-2">
-                            <agentBar.Toggle />
-                        </div>
-
-                        <Show when={agentBar.showAgentBar()}>
-                            <div class="flex-1 p-2 overflow-y-auto space-y-4">
-                                <Show when={relevantAgentCards().length > 0} fallback={
-                                    <LoadingSkeleton />
-                                }>
-                                    <For each={relevantAgentCards()}>
-                                        {(card) => {
-                                            const stream_name = () => {
-                                                const camera = cameras().find(c => c.id === card.media_id);
-                                                return camera ? camera.name : 'Unknown Stream';
-                                            }
-                                            return <div class="animate-push-down p-4 bg-neu-850 rounded-2xl space-y-2">
-                                                <div class="font-semibold">{stream_name()}</div>
-                                                <div class="text-neu-400 text-sm">{formatDistance(card.at_time, Date.now(), {
-                                                    addSuffix: true,
-                                                    includeSeconds: true
-                                                })}</div>
-                                                <div>{card.description}</div>
-                                                <img src={`/files?path=${card.path}`} class="rounded-lg" />
-                                            </div>
-                                        }}
-                                    </For>
-                                </Show>
-                            </div>
-                        </Show>
-
+            <div
+                data-show={agentBar.showAgentBar()}
+                class="flex-none data-[show=true]:w-xl w-0 h-screen transition-[width] duration-300 ease-in-out overflow-hidden  flex flex-col">
+                <div class="border-l border-neu-800 bg-neu-900 shadow-2xl rounded-2xl flex-1 mr-2 my-2 flex flex-col h-full overflow-hidden">
+                    <div class="h-14 flex items-center p-2">
+                        <agentBar.Toggle />
                     </div>
+
+                    <Show when={agentBar.showAgentBar()}>
+                        <div class="flex-1 p-2 overflow-y-auto space-y-4">
+                            <Show when={relevantAgentCards().length > 0} fallback={
+                                <LoadingSkeleton />
+                            }>
+                                <For each={relevantAgentCards()}>
+                                    {(card) => {
+                                        const stream_name = () => {
+                                            const camera = cameras().find(c => c.id === card.media_id);
+                                            return camera ? camera.name : 'Unknown Stream';
+                                        }
+                                        return <div class="animate-push-down p-4 bg-neu-850 rounded-2xl space-y-2">
+                                            <div class="font-semibold">{stream_name()}</div>
+                                            <div class="text-neu-400 text-sm">{formatDistance(card.at_time, Date.now(), {
+                                                addSuffix: true,
+                                                includeSeconds: true
+                                            })}</div>
+                                            <div>{card.description}</div>
+                                            <img src={`/files?path=${card.path}`} class="rounded-lg" />
+                                        </div>
+                                    }}
+                                </For>
+                            </Show>
+                        </div>
+                    </Show>
+
                 </div>
-            </Show>
+            </div>
         </div>
 
     );

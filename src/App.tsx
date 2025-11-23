@@ -4,7 +4,6 @@ import { Dynamic } from 'solid-js/web';
 import type { FrameStatsMessage, ServerEphemeralState } from '~/shared';
 import ArkToast from './ark/ArkToast';
 import Authed from './Authed';
-import HistoryContent from './content/HistoryContent';
 import HomeContent from './content/HomeContent';
 import MomentsContent from './content/MomentsContent';
 import SearchContent from './content/SearchContent';
@@ -91,7 +90,6 @@ export default function App() {
             'home': HomeContent,
             'moments': MomentsContent,
             'view': ViewContent,
-            'history': HistoryContent,
             'search': SearchContent,
             'search_result': SearchResultContent,
             'settings': SettingsContent,

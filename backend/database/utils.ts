@@ -511,8 +511,8 @@ export async function createMoment(moment: Moment): Promise<void> {
     const db = await getDb();
 
     const stmt = db.prepare(`
-        INSERT INTO moments (id, media_id, start_time, end_time, peak_deviation, type, title, short_description, long_description)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO moments (id, media_id, start_time, end_time, peak_deviation, type, title, short_description, long_description, thumbnail_path)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     await stmt.run(
@@ -524,7 +524,8 @@ export async function createMoment(moment: Moment): Promise<void> {
         moment.type || null,
         moment.title || null,
         moment.short_description || null,
-        moment.long_description || null
+        moment.long_description || null,
+        moment.thumbnail_path || null
     );
 }
 

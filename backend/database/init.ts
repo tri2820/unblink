@@ -113,7 +113,8 @@ export async function initDatabase(client: Database) {
                 title TEXT,
                 short_description TEXT,
                 long_description TEXT,
-                clip_path TEXT
+                clip_path TEXT,
+                thumbnail_path TEXT
             );
         `);
         logger.info("Table 'moments' created.");

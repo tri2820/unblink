@@ -36,25 +36,15 @@ export function start_stream(opts: Omit<ServerToWorkerStreamMessage_Add_Stream, 
     opts.worker.postMessage(start_msg);
 }
 
-export function start_stream_file(opts: Omit<ServerToWorkerStreamMessage_Add_File, 'type'> & { worker: Worker }) {
-    const start_msg: ServerToWorkerStreamMessage = {
-        type: 'start_stream_file',
-        media_id: opts.media_id,
-        file_name: opts.file_name,
-    }
 
-    opts.worker.postMessage(start_msg);
-}
 
 export function stop_stream(opts: {
     worker: Worker,
     media_id: string,
-    file_name?: string,
 }) {
     const stop_msg: ServerToWorkerStreamMessage = {
         type: 'stop_stream',
         media_id: opts.media_id,
-        file_name: opts.file_name,
     }
 
     opts.worker.postMessage(stop_msg);

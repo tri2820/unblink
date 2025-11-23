@@ -215,7 +215,6 @@ class OutputFile {
 
 export type StartStreamArg = {
     id: string;
-    file_name?: string;
     uri: string;
     save_location?: string;
 }

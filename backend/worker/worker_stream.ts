@@ -41,7 +41,6 @@ async function startStream(stream: StartStreamArg, signal: AbortSignal) {
         const worker_msg: WorkerStreamToServerMessage = {
             ...msg,
             media_id: stream.id,
-            file_name: stream.file_name,
         }
 
         sendMessage(worker_msg);
@@ -103,37 +102,12 @@ self.addEventListener("message", async (event) => {
         }
     }
 
-    if (msg.type === 'start_stream_file') {
 
-        logger.info(`Starting file stream ${msg.media_id} for file ${msg.file_name}`);
-        const abortController = new AbortController();
-        const loop_id = `${msg.media_id}::${msg.file_name}`;
-
-        // Initialize state for this stream in global workerState
-        workerState.streams.set(msg.media_id, {
-            should_write_moment: false,
-        });
-
-        loops[loop_id] = {
-            controller: abortController,
-        };
-        const dir = `${RECORDINGS_DIR}/${msg.media_id}`;
-        const uri = path.join(dir, msg.file_name);
-        try {
-            await startStream({
-                id: msg.media_id,
-                uri,
-                file_name: msg.file_name,
-            }, abortController.signal);
-        } catch (error) {
-            logger.error(error, `Error starting file stream for ${msg.media_id} file ${msg.file_name}`);
-        }
-    }
 
     if (msg.type === 'stop_stream') {
         logger.info(`Stopping stream ${msg.media_id}`);
         // Stop the stream and clean up resources
-        const loop_id = msg.file_name ? `${msg.media_id}::${msg.file_name}` : msg.media_id;
+        const loop_id = msg.media_id;
         loops[loop_id]?.controller.abort();
 
         // Clean up state for this stream

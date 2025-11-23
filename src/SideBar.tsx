@@ -52,7 +52,7 @@ function MediaGroup(props: { group: { label: string; cameras: Camera[] } }) {
                             }
                             return [];
                         };
-                        const isViewed = () => viewedMedias().some(m => m.media_id === camera.id && !m.file_name);
+                        const isViewed = () => viewedMedias().some(m => m.media_id === camera.id);
                         const onlyViewed = () => viewedMedias().length === 1 && isViewed();
                         return (
                             <div
@@ -126,11 +126,6 @@ export default function SideBar() {
             name: 'Moments',
             icon: FiFilm,
         },
-        {
-            id: 'history',
-            name: 'History',
-            icon: FiClock,
-        },
     ];
 
     return <div class="w-80 h-screen pl-2 py-2 select-none">
@@ -149,7 +144,7 @@ export default function SideBar() {
                 <For each={tabs}>
                     {_tab => <button
                         onClick={() => setTab({
-                            type: _tab.id as 'home' | 'search' | 'moments' | 'history'
+                            type: _tab.id as 'home' | 'search' | 'moments'
                         })}
                         data-active={
                             tab().type === _tab.id

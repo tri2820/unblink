@@ -7,7 +7,7 @@ import { WsClient } from "./backend/WsClient";
 import { FRAMES_DIR, RECORDINGS_DIR, RUNTIME_DIR } from "./backend/appdir";
 import { auth_required, verifyPassword } from "./backend/auth";
 import { closeDb } from "./backend/database/database";
-import { createMedia, createSession, deleteMedia, deleteSession, getAllMedia, getAllMoments, getAllSettings as getAllSettingsDB, getAllUsers, getByQuery, getFirstMediaUnitInTimeRange, getMediaUnitsByEmbedding, getUserByUsername as getUserByUsernameDB, setSetting as setSettingDB, updateMedia } from "./backend/database/utils";
+import { createMedia, createSession, deleteMedia, deleteSession, getAllMedia, getAllMoments, getAllSettings as getAllSettingsDB, getAllUsers, getByQuery, getFirstMediaUnitInTimeRange, getMediaUnitsByEmbedding, getMomentById, getUserByUsername as getUserByUsernameDB, setSetting as setSettingDB, updateMedia } from "./backend/database/utils";
 import { createForwardFunction } from "./backend/forward";
 import { logger } from "./backend/logger";
 import { check_version } from "./backend/startup/check_version";
@@ -16,9 +16,9 @@ import { load_secrets } from "./backend/startup/load_secrets";
 import { load_settings } from "./backend/startup/load_settings";
 import { create_webhook_forward } from "./backend/webhook";
 import { spawn_worker } from "./backend/worker_connect/shared";
-import { start_stream, start_stream_file, start_streams, stop_stream } from "./backend/worker_connect/worker_stream_connector";
+import { start_stream, start_streams, stop_stream } from "./backend/worker_connect/worker_stream_connector";
 import homepage from "./index.html";
-import type { ClientToServerMessage, DbUser, RecordingsResponse, RESTQuery, ServerEphemeralState } from "./shared";
+import type { ClientToServerMessage, DbUser, RESTQuery, ServerEphemeralState } from "./shared";
 
 // Check args for "admin" mode
 if (process.argv[2] === "admin") {
@@ -225,53 +225,52 @@ const server = Bun.serve({
         '/moments': {
             GET: async () => {
                 const moments = await getAllMoments();
-                const momentsWithThumbnails = await Promise.all(moments.map(async (moment) => {
-                    const firstUnit = await getFirstMediaUnitInTimeRange(moment.media_id, moment.start_time, moment.end_time);
-                    return {
-                        ...moment,
-                        thumbnail: firstUnit ? firstUnit.path : null
-                    };
-                }));
-                return Response.json(momentsWithThumbnails);
+                return Response.json(moments);
             }
         },
-        '/recordings': {
-            GET: async () => {
+        '/moments/:id/thumbnail': {
+            GET: async ({ params }: { params: { id: string } }) => {
+                const { id } = params;
+
+                // Fetch the moment from the database
+                const moment = await getMomentById(id);
+
+                if (!moment) {
+                    return new Response('Moment not found', { status: 404 });
+                }
+
+                if (!moment.thumbnail_path) {
+                    return new Response('No thumbnail available', { status: 404 });
+                }
+
+                // Validate that the thumbnail path is within FRAMES_DIR
+                const absoluteFilePath = path.resolve(moment.thumbnail_path);
+                if (!absoluteFilePath.startsWith(FRAMES_DIR)) {
+                    logger.error({ moment_id: id, path: moment.thumbnail_path }, 'Invalid thumbnail path');
+                    return new Response('Invalid thumbnail path', { status: 400 });
+                }
+
                 try {
-                    const recordingsByStream: RecordingsResponse = {};
-                    const glob = new Bun.Glob("*/*.mkv");
-                    for await (const file of glob.scan(RECORDINGS_DIR)) {
-                        const parts = file.split("/");
-                        if (parts.length < 2) {
-                            continue;
-                        }
-                        const mediaId = parts[0]!;
-                        // from_1762122447803_ms.mkv
-                        const file_name = parts[1]!;
+                    const file = Bun.file(moment.thumbnail_path);
 
-                        const from_ms = file_name.match(/from_(\d+)_ms\.mkv/)?.[1];
-                        const to_ms = file_name.match(/_to_(\d+)_ms\.mkv/)?.[1];
-
-                        const fromDate = from_ms ? new Date(parseInt(from_ms)) : null;
-                        const toDate = to_ms ? new Date(parseInt(to_ms)) : null;
-
-                        if (!recordingsByStream[mediaId]) {
-                            recordingsByStream[mediaId] = [];
-                        }
-
-                        recordingsByStream[mediaId].push({
-                            file_name: file_name,
-                            from_ms: fromDate?.getTime(),
-                            to_ms: toDate?.getTime(),
-                        });
+                    // Check if file exists
+                    if (!(await file.exists())) {
+                        return new Response('Thumbnail file not found', { status: 404 });
                     }
-                    return Response.json(recordingsByStream);
+
+                    const headers = new Headers();
+                    headers.set('Content-Type', file.type || 'image/jpeg');
+                    headers.set('Content-Disposition', 'inline');
+                    headers.set('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+
+                    return new Response(file.stream(), { headers });
                 } catch (error) {
-                    logger.error({ error }, 'Error fetching recordings');
-                    return new Response('Error fetching recordings', { status: 500 });
+                    logger.error({ error, moment_id: id }, 'Error fetching moment thumbnail');
+                    return new Response('Error fetching thumbnail', { status: 500 });
                 }
             }
         },
+
         '/settings': {
             GET: async (req) => {
                 const settings = await getAllSettingsDB();
@@ -402,42 +401,7 @@ const server = Bun.serve({
                 if (decoded.type === 'set_subscription') {
                     const client = clients.get(ws);
                     if (client) {
-                        const oldFileStreams = client.subscription?.streams.filter(s => s.file_name) || [];
-
                         client.updateSubscription(decoded.subscription);
-                        // logger.info(`Client subscription updated for ${ws.remoteAddress}: ${JSON.stringify(client.subscription)}`);
-
-                        const newFileStreams = decoded.subscription?.streams.filter(s => s.file_name) || [];
-                        // logger.info(`Client file subscriptions for ${ws.remoteAddress}: ${JSON.stringify(newFileStreams)}`);
-
-                        const removedOldFileStreams = oldFileStreams.filter(oldStream =>
-                            !newFileStreams.find(newStream => newStream.id === oldStream.id && newStream.file_name === oldStream.file_name)
-                        );
-
-                        for (const stream of removedOldFileStreams) {
-                            logger.info(`Client unsubscribed from file stream ${stream.id} (file: ${stream.file_name})`);
-                            // Notify the worker about the removed file stream
-                            stop_stream({
-                                worker: worker_stream,
-                                media_id: stream.id,
-                                file_name: stream.file_name,
-                            });
-                        }
-
-                        const addedNewFileStreams = newFileStreams.filter(newStream =>
-                            !oldFileStreams.find(oldStream => oldStream.id === newStream.id && oldStream.file_name === newStream.file_name)
-                        );
-
-                        for (const stream of addedNewFileStreams) {
-                            logger.info(`Client subscribed to file stream ${stream.id} (file: ${stream.file_name})`);
-                            // Notify the worker about the added file stream
-                            start_stream_file({
-                                worker: worker_stream,
-                                media_id: stream.id,
-                                file_name: stream.file_name!,
-                            });
-                        }
-
                     }
                 }
             } catch (error) {

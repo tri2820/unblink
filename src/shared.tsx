@@ -15,12 +15,11 @@ export type Camera = {
 };
 
 export type Tab = {
-    type: 'home' | 'search' | 'moments' | 'history' | 'settings';
+    type: 'home' | 'search' | 'moments' | 'settings';
 } | {
     type: 'view';
     medias: {
         media_id: string;
-        file_name?: string;
     }[]
 } | {
     type: 'search_result';
@@ -83,10 +82,9 @@ export const relevantAgentCards = () => {
         const t = tab();
         return t.type === 'view' ? t.medias : [];
     }
-    const liveStreams = viewedMedias().filter(m => !m.file_name)
     const cards = agentCards();
     // newest first
-    const relevant_cards = cards.filter(c => liveStreams.some(media => media.media_id === c.media_id)).toSorted((a, b) => new Date(b.at_time).getTime() - new Date(a.at_time).getTime());
+    const relevant_cards = cards.filter(c => viewedMedias().some(media => media.media_id === c.media_id)).toSorted((a, b) => new Date(b.at_time).getTime() - new Date(a.at_time).getTime());
 
     return relevant_cards;
 }

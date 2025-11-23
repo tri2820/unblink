@@ -3,7 +3,7 @@ import { FiImage } from "solid-icons/fi";
 import LayoutContent from "./LayoutContent";
 import type { Moment } from "../../shared/database";
 
-type MomentWithThumbnail = Moment & { thumbnail: string | null };
+type MomentWithThumbnail = Moment;
 
 const fetchMoments = async (): Promise<MomentWithThumbnail[]> => {
     const response = await fetch("/moments");
@@ -25,9 +25,9 @@ export default function MomentsContent() {
                             {(moment) => (
                                 <div class="moment-card">
                                     <div class="aspect-video bg-neu-900 relative">
-                                        <Show when={moment.thumbnail} fallback={<div class="absolute inset-0 flex items-center justify-center text-neu-600">No Preview</div>}>
+                                        <Show when={moment.thumbnail_path} fallback={<div class="absolute inset-0 flex items-center justify-center text-neu-600">No Preview</div>}>
                                             <img
-                                                src={`/files?path=${encodeURIComponent(moment.thumbnail!)}`}
+                                                src={`/moments/${moment.id}/thumbnail`}
                                                 alt={moment.title || "Moment"}
                                                 class="w-full h-full object-cover"
                                             />

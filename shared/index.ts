@@ -40,7 +40,6 @@ export type Subscription = {
     session_id: string;
     streams: {
         id: string;
-        file_name?: string;
     }[];
 }
 
@@ -59,7 +58,7 @@ export type ServerToClientMessage = (WorkerToServerMessage | EngineToServer | Fr
     session_id?: string;
 }
 
-export type WorkerStreamToServerMessage = (StreamMessage & { media_id: string, file_name?: string }) | {
+export type WorkerStreamToServerMessage = (StreamMessage & { media_id: string }) | {
     type: "error";
     media_id: string;
 } | {
@@ -84,12 +83,11 @@ export type ServerToWorkerStreamMessage_Add_Stream = {
 export type ServerToWorkerStreamMessage_Add_File = {
     type: 'start_stream_file',
     media_id: string,
-    file_name: string,
+    file_path: string,
 }
 export type ServerToWorkerStreamMessage = ServerToWorkerStreamMessage_Add_Stream | ServerToWorkerStreamMessage_Add_File | {
     type: 'stop_stream',
     media_id: string,
-    file_name?: string,
 } | {
     type: 'set_moment_state',
     media_id: string,
@@ -111,11 +109,7 @@ export type ServerToWorkerStreamMessage = ServerToWorkerStreamMessage_Add_Stream
 //     objects: DetectionObject[];
 // }
 
-export type RecordingsResponse = Record<string, {
-    file_name: string;
-    from_ms?: number;
-    to_ms?: number;
-}[]>;
+
 
 export type User = Pick<DbUser, 'id' | 'username' | 'role'>;
 export type DbUser = {
