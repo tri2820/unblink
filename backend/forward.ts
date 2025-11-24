@@ -57,7 +57,7 @@ export const createForwardFunction = (opts: ForwardingOpts) => {
             }
         }
 
-        if (decoded.type === 'codec' || decoded.type === 'frame') {
+        if (decoded.type === 'codec' || decoded.type === 'frame' || decoded.type === 'ended') {
             // Forward to clients
             for (const [, client] of opts.clients) {
                 client.send(decoded);
@@ -84,9 +84,9 @@ export const createForwardFunction = (opts: ForwardingOpts) => {
                 if (now - last_time_run < builder.interval) continue;
                 state.streams[decoded.id]![builder_id] = now;
 
-                if (builder_id == 'indexing') {
-                    logger.info({ media_id: decoded.id }, 'Indexing ...')
-                }
+                // if (builder_id == 'indexing') {
+                //     logger.info({ media_id: decoded.id }, 'Indexing ...')
+                // }
                 await builder.write?.(decoded.id, media_unit_id, decoded.data)
                 for (const key of builder.keys) {
                     msg.workers[key] = true;

@@ -18,14 +18,17 @@ class MjpegPlayer {
     private onDrawingStateChange: (isDrawing: boolean) => void;
     public _showDetections = true;
     public cameraName: string | undefined;
+    public rounded: boolean;
 
     constructor(
         canvas: HTMLCanvasElement,
-        onDrawingStateChange: (isDrawing: boolean) => void
+        onDrawingStateChange: (isDrawing: boolean) => void,
+        rounded: boolean = false
     ) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d')!;
         this.onDrawingStateChange = onDrawingStateChange;
+        this.rounded = rounded;
         this.startRenderLoop();
     }
 
@@ -70,7 +73,6 @@ class MjpegPlayer {
 
         if (this.img) {
             const geom = this.calculateRenderGeometry();
-            const r = 16;
 
             const x = geom.offsetX;
             const y = geom.offsetY;
@@ -78,18 +80,22 @@ class MjpegPlayer {
             const h = geom.renderHeight;
 
             this.ctx.save();
-            this.ctx.beginPath();
-            this.ctx.moveTo(x + r, y);
-            this.ctx.lineTo(x + w - r, y);
-            this.ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-            this.ctx.lineTo(x + w, y + h - r);
-            this.ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-            this.ctx.lineTo(x + r, y + h);
-            this.ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-            this.ctx.lineTo(x, y + r);
-            this.ctx.quadraticCurveTo(x, y, x + r, y);
-            this.ctx.closePath();
-            this.ctx.clip();
+
+            if (this.rounded) {
+                const r = 16;
+                this.ctx.beginPath();
+                this.ctx.moveTo(x + r, y);
+                this.ctx.lineTo(x + w - r, y);
+                this.ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+                this.ctx.lineTo(x + w, y + h - r);
+                this.ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+                this.ctx.lineTo(x + r, y + h);
+                this.ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+                this.ctx.lineTo(x, y + r);
+                this.ctx.quadraticCurveTo(x, y, x + r, y);
+                this.ctx.closePath();
+                this.ctx.clip();
+            }
 
             this.ctx.drawImage(
                 this.img,
@@ -252,7 +258,7 @@ class MjpegPlayer {
     }
 }
 
-export default function CanvasVideo(props: { id: string, showDetections: Accessor<boolean>, name: Accessor<string | undefined> }) {
+export default function CanvasVideo(props: { id: string, showDetections: Accessor<boolean>, name: Accessor<string | undefined>, rounded?: boolean }) {
     const [canvasRef, setCanvasRef] = createSignal<HTMLCanvasElement>();
     const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
     const [isDrawing, setIsDrawing] = createSignal(false);
@@ -275,7 +281,7 @@ export default function CanvasVideo(props: { id: string, showDetections: Accesso
     createEffect(() => {
         const canvas = canvasRef();
         if (canvas && !player) {
-            player = new MjpegPlayer(canvas, setIsDrawing);
+            player = new MjpegPlayer(canvas, setIsDrawing, props.rounded ?? false);
             const name = props.name();
             if (name) {
                 player.setCameraName(name);

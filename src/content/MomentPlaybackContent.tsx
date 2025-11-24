@@ -1,21 +1,18 @@
 import { createEffect, createResource, createSignal, onCleanup, Show } from "solid-js";
 import { v4 as uuid } from 'uuid';
+import { FaSolidPlay } from 'solid-icons/fa';
 import LayoutContent from "./LayoutContent";
 import type { Moment } from "../../shared/database";
 import { cameras, setSubscription, subscription, tab } from "../shared";
 import CanvasVideo from "../CanvasVideo";
+import { newMessage } from "../video/connection";
 
 const fetchMoment = async (id: string): Promise<Moment> => {
-    const response = await fetch("/moments");
+    const response = await fetch(`/moments/${id}`);
     if (!response.ok) {
-        throw new Error("Failed to fetch moments");
+        throw new Error("Failed to fetch moment");
     }
-    const moments: Moment[] = await response.json();
-    const moment = moments.find(m => m.id === id);
-    if (!moment) {
-        throw new Error("Moment not found");
-    }
-
+    const moment: Moment = await response.json();
     console.log('moment', moment);
     return moment;
 };
@@ -26,6 +23,7 @@ export default function MomentPlaybackContent() {
 
     const [moment] = createResource(() => momentId, fetchMoment);
     const [showDetections] = createSignal(false); // Moments don't have object detection
+    const [isPlaying, setIsPlaying] = createSignal(false); // Track playing state
 
     // Get camera name for display
     const cameraName = () => {
@@ -35,10 +33,10 @@ export default function MomentPlaybackContent() {
         return camera?.name;
     };
 
-    // Handle subscription for moment playback
+    // Handle subscription for moment playback - only when playing
     createEffect(() => {
         const m = moment();
-        if (m && m.clip_path) {
+        if (m && m.clip_path && isPlaying()) {
             console.log('Setting up moment playback subscription for:', momentId);
             const session_id = uuid();
 
@@ -53,10 +51,30 @@ export default function MomentPlaybackContent() {
         }
     });
 
-    // Cleanup subscription on unmount
+    // Cleanup subscription on unmount or when stopping
     onCleanup(() => {
         console.log('MomentPlaybackContent unmounting, clearing subscription');
         setSubscription(undefined);
+    });
+
+    // Handle play button click
+    const handlePlay = () => {
+        setIsPlaying(true);
+    };
+
+    // Listen for stream ended message to reset play state
+    createEffect(() => {
+        const message = newMessage();
+        if (!message) return;
+        const s = subscription();
+        if (!s) return;
+
+        // Check if this is an 'ended' message for our moment
+        if (message.type === 'ended' && message.id === momentId && message.session_id === s.session_id) {
+            console.log('Moment playback ended, resetting to play button');
+            setIsPlaying(false);
+            setSubscription(undefined);
+        }
     });
 
     return (
@@ -88,7 +106,7 @@ export default function MomentPlaybackContent() {
                             </div>
 
                             {/* Video Player */}
-                            <div class="flex-1 bg-black">
+                            <div class="flex-1 bg-black relative">
                                 <Show
                                     when={m().clip_path}
                                     fallback={
@@ -97,21 +115,39 @@ export default function MomentPlaybackContent() {
                                         </div>
                                     }
                                 >
-                                    <CanvasVideo
-                                        id={momentId}
-                                        showDetections={showDetections}
-                                        name={cameraName}
-                                    />
+                                    <Show
+                                        when={isPlaying()}
+                                        fallback={
+                                            <div
+                                                class="absolute inset-0 cursor-pointer group"
+                                                onClick={handlePlay}
+                                            >
+                                                {/* Thumbnail */}
+                                                <Show when={m().thumbnail_path}>
+                                                    <img
+                                                        src={`/moments/${momentId}/thumbnail`}
+                                                        alt="Moment thumbnail"
+                                                        class="absolute inset-0 w-full h-full object-contain"
+                                                    />
+                                                </Show>
+
+                                                {/* Play Button Overlay */}
+                                                <div class="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/50 transition-colors">
+                                                    <div class="rounded-full bg-white/90 group-hover:bg-white p-6 transition-colors">
+                                                        <FaSolidPlay size={48} class="text-black ml-1" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        }
+                                    >
+                                        <CanvasVideo
+                                            id={momentId}
+                                            showDetections={showDetections}
+                                            name={cameraName}
+                                        />
+                                    </Show>
                                 </Show>
                             </div>
-
-                            {/* Additional Details */}
-                            <Show when={m().long_description}>
-                                <div class="p-4 bg-neu-900 border-t border-neu-800">
-                                    <h3 class="text-sm font-semibold text-neu-200 mb-2">Details</h3>
-                                    <p class="text-sm text-neu-400">{m().long_description}</p>
-                                </div>
-                            </Show>
                         </>
                     )}
                 </Show>

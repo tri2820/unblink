@@ -524,4 +524,9 @@ export async function streamMedia(
     }
 
     logger.info("Streaming loop ended");
+
+    // Send ended message to frontend
+    onMessage({
+        type: 'ended'
+    });
 }

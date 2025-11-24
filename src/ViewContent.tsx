@@ -164,6 +164,7 @@ export default function ViewContent() {
                                                 {(media) => {
                                                     return <div style={{ width: `calc((100% - (${cols() - 1} * ${GAP_SIZE})) / ${cols()})`, height: '100%' }}>
                                                         <CanvasVideo
+                                                            rounded
                                                             id={media.media_id}
                                                             showDetections={showDetections}
                                                             name={() => cameras().find(c => c.id === media.media_id)?.name}

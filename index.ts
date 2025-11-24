@@ -232,6 +232,18 @@ const server = Bun.serve({
                 return Response.json(moments);
             }
         },
+        '/moments/:id': {
+            GET: async ({ params }: { params: { id: string } }) => {
+                const { id } = params;
+                const moment = await getMomentById(id);
+
+                if (!moment) {
+                    return new Response('Moment not found', { status: 404 });
+                }
+
+                return Response.json(moment);
+            }
+        },
         '/moments/:id/thumbnail': {
             GET: async ({ params }: { params: { id: string } }) => {
                 const { id } = params;

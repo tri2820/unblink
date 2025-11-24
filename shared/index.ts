@@ -37,6 +37,8 @@ export type StreamMessage = {
     media_id: string;
     moment_id: string;
     clip_path: string;
+} | {
+    type: 'ended';
 };
 
 

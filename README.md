@@ -12,9 +12,10 @@
 
 Unblink is a camera monitoring application that runs AI vision models on your camera streams in real-time. Key features:
 
-- 👀 Object detection
 - 🤓 Contextual understanding
+- 👀 Object detection
 - 🔎 Intelligent search across your video feeds.
+- ⚡ Sub-second video streaming
 
 Live demo: [https://app.zapdoslabs.com](https://app.zapdoslabs.com)
 
@@ -117,7 +118,7 @@ For administration, please refer to [ADMIN.md](/docs/ADMIN.md)
 | D-FINE Object Detection | ✅ Stable | |
 | SmolVLM2 Integration | ✅ Stable | |
 | Semantic Search | 🤔 WIP | Need to rework UI |
-| Video Recording & Playback | 🤔 WIP | Need to implement controls (help needed) |
+| Video Recording & Playback | 🚧 Coming Soon |  |
 | Motion Detection | 🚧 Coming Soon |  |
 | ONVIF Support | 🚧 Coming Soon |  |
 | Webhook | ✅ Stable |  |
