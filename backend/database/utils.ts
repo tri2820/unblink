@@ -12,13 +12,13 @@ export async function getMediaById(id: string): Promise<Media | undefined> {
 
     if (row) {
         // Map lowercase column names to camelCase for consistency with interface
-        if (row.savetodisk !== undefined) {
-            row.saveToDisk = row.savetodisk;
-            delete row.savetodisk;
+        if (row.save_to_disk !== undefined) {
+            row.save_to_disk = row.save_to_disk;
+            delete row.save_to_disk;
         }
-        if (row.savedir !== undefined) {
-            row.saveDir = row.savedir;
-            delete row.savedir;
+        if (row.save_location !== undefined) {
+            row.save_location = row.save_location;
+            delete row.save_location;
         }
 
         try {
@@ -28,11 +28,11 @@ export async function getMediaById(id: string): Promise<Media | undefined> {
             row.labels = []; // Default to empty array on error
         }
 
-        // Handle better-sqlite3's 0 to null conversion for INTEGER columns like saveToDisk
-        if (row.saveToDisk === null) {
-            row.saveToDisk = 0;
-        } else if (row.saveToDisk !== undefined) {
-            row.saveToDisk = Number(row.saveToDisk);
+        // Handle better-sqlite3's 0 to null conversion for INTEGER columns like save_to_disk
+        if (row.save_to_disk === null) {
+            row.save_to_disk = 0;
+        } else if (row.save_to_disk !== undefined) {
+            row.save_to_disk = Number(row.save_to_disk);
         }
     }
     return row as Media | undefined;
@@ -75,7 +75,7 @@ export async function createMedia(media: Media): Promise<void> {
     const updatedAt = Date.now();
 
     const stmt = db.prepare(`
-        INSERT INTO media (id, name, uri, labels, updated_at, saveToDisk, saveDir) 
+        INSERT INTO media (id, name, uri, labels, updated_at, save_to_disk, save_location) 
         VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
@@ -85,8 +85,8 @@ export async function createMedia(media: Media): Promise<void> {
         media.uri,
         JSON.stringify(media.labels),
         updatedAt,
-        media.saveToDisk === undefined ? null : media.saveToDisk,
-        media.saveDir === undefined ? null : media.saveDir
+        media.save_to_disk === undefined ? null : media.save_to_disk,
+        media.save_location === undefined ? null : media.save_location
     );
 }
 

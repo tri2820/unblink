@@ -6,8 +6,8 @@ export interface Media {
     uri: string;
     labels: string[];
     updated_at: number;
-    saveToDisk?: number | null;
-    saveDir?: string | null;
+    save_to_disk?: number | null;
+    save_location?: string | null;
 }
 
 export interface Setting {

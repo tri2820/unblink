@@ -58,7 +58,7 @@ export function connect_to_engine(props: {
 
                 // Forward to clients 
                 for (const [id, client] of props.clients()) {
-                    client.send(msg, false);
+                    client.send(msg);
                 }
 
                 // Also forward to webhook

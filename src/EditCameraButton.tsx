@@ -12,22 +12,22 @@ export default function EditCameraButton(props: { camera: Camera, children: any 
     const [name, setName] = createSignal('');
     const [uri, setUri] = createSignal('');
     const [labels, setLabels] = createSignal('');
-    const [saveToDisk, setSaveToDisk] = createSignal(false);
-    const [saveDir, setsaveDir] = createSignal('');
+    const [save_to_disk, setsave_to_disk] = createSignal(false);
+    const [save_location, set_save_location] = createSignal('');
 
     onMount(() => {
         setName(props.camera.name);
         setUri(props.camera.uri);
         setLabels(props.camera.labels.join(', '));
-        setSaveToDisk(props.camera.saveToDisk || false);
-        setsaveDir(props.camera.saveDir || '');
+        setsave_to_disk(props.camera.save_to_disk || false);
+        set_save_location(props.camera.save_location || '');
     });
 
     const handleSave = async () => {
         const _name = untrack(name).trim();
         const _uri = untrack(uri).trim();
-        const _saveDir = untrack(saveDir).trim();
-        const _saveToDisk = untrack(saveToDisk);
+        const _save_location = untrack(save_location).trim();
+        const _save_to_disk = untrack(save_to_disk);
         if (!_name || !_uri) {
             return;
         }
@@ -44,8 +44,8 @@ export default function EditCameraButton(props: { camera: Camera, children: any 
                     name: _name,
                     uri: _uri,
                     labels: labelsArray,
-                    saveToDisk: _saveToDisk,
-                    saveDir: _saveDir,
+                    save_to_disk: _save_to_disk,
+                    save_location: _save_location,
                 }),
             });
 
@@ -106,16 +106,16 @@ export default function EditCameraButton(props: { camera: Camera, children: any 
             </div>
             {/* <div class="flex items-center justify-between">
                 <ArkSwitch
-                    checked={saveToDisk}
-                    onCheckedChange={(details) => setSaveToDisk(details.checked)}
+                    checked={save_to_disk}
+                    onCheckedChange={(details) => setsave_to_disk(details.checked)}
                     label="Save to Disk"
                 />
             </div> */}
             <div>
                 <label for="save-dir" class="text-sm font-medium text-neu-300">Video Directory</label>
                 <input
-                    value={saveDir()}
-                    onInput={(e: Event & { currentTarget: HTMLInputElement }) => setsaveDir(e.currentTarget.value)}
+                    value={save_location()}
+                    onInput={(e: Event & { currentTarget: HTMLInputElement }) => set_save_location(e.currentTarget.value)}
                     placeholder='/path/to/recordings'
                     type="text" id="save-dir" class="px-3 py-1.5 mt-1 block w-full rounded-lg bg-neu-850 border border-neu-750 text-white focus:outline-none placeholder:text-neu-500" />
             </div>

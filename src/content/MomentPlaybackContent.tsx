@@ -114,7 +114,7 @@ export default function MomentPlaybackContent() {
 
         // Check if this is an 'ended' message for our moment
         const stream_sub = s.streams.find(stream => stream.id === momentId);
-        if (!stream_sub) return;
+        if (!stream_sub || stream_sub.type !== 'ephemeral') return;
 
         if (message.type === 'ended' && message.id === momentId && message.session_id === stream_sub.session_id) {
             console.log('Moment playback ended, resetting to play button');

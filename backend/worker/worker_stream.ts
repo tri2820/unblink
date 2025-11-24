@@ -1,7 +1,7 @@
 import { encode } from "cbor-x";
-import type { PassThroughOpts, ServerToWorkerStreamMessage, WorkerStreamToServerMessage } from "../../shared";
+import type { PassThroughOpts, ServerToWorkerStreamMessage, ServerToWorkerStreamMessage_Add_Stream, WorkerStreamToServerMessage } from "../../shared";
 import { logger } from "../logger";
-import { streamMedia, type StartStreamArg } from "../stream/index";
+import { streamMedia } from "../stream/index";
 import type { WorkerState } from "./worker_state";
 declare var self: Worker;
 
@@ -33,13 +33,22 @@ function sendMessage(msg: WorkerStreamToServerMessage) {
     self.postMessage(worker_msg, [worker_msg.buffer]);
 }
 
-async function startStream(startArg: StartStreamArg, signal: AbortSignal, passthrough: PassThroughOpts) {
+async function startStream(startArg: ServerToWorkerStreamMessage_Add_Stream, signal: AbortSignal) {
     logger.info(`Starting media stream for ${startArg.id}`);
 
     await streamMedia({
         ...startArg,
-        // init_seek_sec: 6
     }, (msg) => {
+
+        // TODO: Use typescript to enforce this
+        // Do not pay attention to the types here, it's just a hack
+        // Make sure all passthrough fields are passed
+        const passthrough = {
+            id: startArg.id,
+            is_ephemeral: startArg.is_ephemeral,
+            session_id: startArg.session_id,
+        }
+
         const worker_msg: WorkerStreamToServerMessage = {
             ...msg,
             ...passthrough,
@@ -50,7 +59,7 @@ async function startStream(startArg: StartStreamArg, signal: AbortSignal, passth
     }, signal, () => workerState);
 }
 
-async function startFaultTolerantStream(startArg: StartStreamArg, signal: AbortSignal, passthrough: PassThroughOpts) {
+async function startFaultTolerantStream(startArg: ServerToWorkerStreamMessage_Add_Stream, signal: AbortSignal) {
     const state = {
         hearts: 5,
     }
@@ -61,7 +70,7 @@ async function startFaultTolerantStream(startArg: StartStreamArg, signal: AbortS
                 logger.info(`Stream ${startArg.id} has been stable for 30 seconds, full recovery.`);
                 state.hearts = 5;
             }, 30000);
-            await startStream(startArg, signal, passthrough);
+            await startStream(startArg, signal);
             logger.info('Stream ended gracefully, stopping.')
             break;
         } catch (e) {
@@ -88,29 +97,15 @@ self.addEventListener("message", async (event) => {
 
 
     if (msg.type === 'start_stream') {
-
-        // Make all keys nonnullable
-        const passthrough: Required<PassThroughOpts> = {
-            id: msg.id,
-            is_ephemeral: msg.is_ephemeral as any,
-        }
-
-        const loop_id = msg.id;
         // console.log({ msg: JSON.stringify(msg) }, `Starting stream`);
 
         if (msg.uri) {
             const abortController = new AbortController();
-            loops[loop_id] = {
+            loops[msg.id] = {
                 controller: abortController,
             };
 
-            startFaultTolerantStream({
-                id: loop_id,
-                uri: msg.uri,
-                save_location: msg.saveDir,
-                init_seek_sec: msg.init_seek_sec,
-                is_ephemeral: msg.is_ephemeral,
-            }, abortController.signal, passthrough);
+            startFaultTolerantStream(msg, abortController.signal);
         }
     }
 

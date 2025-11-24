@@ -15,7 +15,7 @@ export async function start_streams(opts: {
                 start_stream(opts.worker_stream, {
                     id: media.id,
                     uri: media.uri,
-                    saveDir: media.saveDir || '',
+                    save_location: media.save_location || '',
                 });
             }
         }

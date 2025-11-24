@@ -23,7 +23,7 @@ export async function onboardMedia(db: Database) {
             },
         ],
         statement: `
-            INSERT INTO media (id, name, uri, labels, updated_at, saveToDisk, saveDir) 
+            INSERT INTO media (id, name, uri, labels, updated_at, save_to_disk, save_location) 
             VALUES (?, ?, ?, ?, ?, 0, NULL);
         `,
         transform: (entry) => {

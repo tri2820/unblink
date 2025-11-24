@@ -61,8 +61,7 @@ export default function ViewContent() {
 
             setSubscription({
                 streams: medias.map(media => {
-                    const session_id = uuid();
-                    return { session_id, id: media.media_id, kind: 'media' as const }
+                    return { id: media.media_id, kind: 'media' as const }
                 }),
             });
         } else {

@@ -16,8 +16,8 @@ beforeAll(async () => {
         uri: 'dummy://query-test',
         labels: ['query-test'],
         updated_at: Date.now(),
-        saveToDisk: 0,
-        saveDir: null
+        save_to_disk: 0,
+        save_location: null
     });
 
     // Create 60 items to test default limit (50) and explicit limits

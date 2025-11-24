@@ -10,8 +10,8 @@ export type Camera = {
     uri: string;
     labels: string[];
     updated_at: string;
-    saveToDisk: boolean;
-    saveDir: string;
+    save_to_disk: boolean;
+    save_location: string;
 };
 
 export type Tab = {

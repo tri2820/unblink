@@ -24,8 +24,8 @@ beforeAll(async () => {
         uri: 'test://media-units',
         labels: ['test'],
         updated_at: Date.now(),
-        saveToDisk: 0,
-        saveDir: null
+        save_to_disk: 0,
+        save_location: null
     });
 });
 

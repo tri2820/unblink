@@ -39,8 +39,8 @@ export async function initDatabase(client: Database) {
                 uri TEXT NOT NULL,
                 labels TEXT,
                 updated_at INTEGER NOT NULL,
-                saveToDisk INTEGER,
-                saveDir TEXT
+                save_to_disk INTEGER,
+                save_location TEXT
             );
         `);
         logger.info("Table 'media' created.");

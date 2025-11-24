@@ -37,8 +37,8 @@ test("Get media by ID", async () => {
         uri: 'rtsp://test.com/id',
         labels: ['Test'],
         updated_at: Date.now(),
-        saveToDisk: 0,
-        saveDir: null
+        save_to_disk: 0,
+        save_location: null
     });
     const media = await getMediaById(id);
     expect(media).toBeDefined();
@@ -60,8 +60,8 @@ test("Create a new media entry", async () => {
         uri: 'rtsp://example.com/test',
         labels: ['Test', 'New'],
         updated_at: Date.now(),
-        saveToDisk: 1,
-        saveDir: '/test/recordings'
+        save_to_disk: 1,
+        save_location: '/test/recordings'
     });
     const media = await getMediaById(id);
     expect(media).toBeDefined();
@@ -77,16 +77,16 @@ test("Update the media", async () => {
         uri: 'rtsp://example.com/update',
         labels: ['Old'],
         updated_at: Date.now(),
-        saveToDisk: 1,
-        saveDir: null
+        save_to_disk: 1,
+        save_location: null
     });
     await updateMedia(id, {
         name: 'Updated Media',
-        saveToDisk: 0
+        save_to_disk: 0
     });
     const updatedMedia = await getMediaById(id);
     expect(updatedMedia?.name).toBe('Updated Media');
-    expect(updatedMedia?.saveToDisk).toBe(0);
+    expect(updatedMedia?.save_to_disk).toBe(0);
     await deleteMedia(id);
 });
 
@@ -98,8 +98,8 @@ test("Delete media and verify", async () => {
         uri: 'rtsp://test.com/delete',
         labels: ['Test', 'Delete'],
         updated_at: Date.now(),
-        saveToDisk: 0,
-        saveDir: null
+        save_to_disk: 0,
+        save_location: null
     });
     const media = await getMediaById(id);
     expect(media).toBeDefined();

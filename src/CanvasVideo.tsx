@@ -297,19 +297,31 @@ export default function CanvasVideo(props: { id: string, showDetections: Accesso
     });
 
     createEffect(() => {
-        const message = newMessage();
-        if (!message) return;
         const s = subscription();
         if (!s) return;
 
         const stream_sub = s.streams.find(stream => stream.id === props.id);
         if (!stream_sub) return;
 
-        const isCorrectStreamMessage = (message.type == 'frame' || message.type == 'codec') && message.id === props.id && message.session_id == stream_sub.session_id;
-        const isCorrectEngineMessage = message.type == 'frame_object_detection' && message.media_id === props.id && message.session_id == stream_sub.session_id;
-        // if (message.type === 'frame_object_detection' && isCorrectEngineMessage) {
-        //     console.log('CanvasVideo received message:', message);
+        const ses_id = stream_sub.type === 'ephemeral' ? stream_sub.session_id : undefined;
+
+        const message = newMessage();
+        if (!message) return;
+        const isCorrectStreamMessage = (message.type == 'frame' || message.type == 'codec') && message.id === props.id && message.session_id === ses_id;
+        const isCorrectEngineMessage = message.type == 'frame_object_detection' && message.media_id === props.id && message.session_id === ses_id;
+        // if (message.type === 'frame_object_detection') {
+        //     console.log('CanvasVideo received obj message:', message);
         // }
+
+        if (message.type === 'frame') {
+            console.log('CanvasVideo received frame message:', {
+                message,
+                isCorrectStreamMessage,
+                ses_id,
+                props_id: props.id
+            });
+        }
+
         if (isCorrectStreamMessage || isCorrectEngineMessage) {
             player?.handleMessage(message);
         }

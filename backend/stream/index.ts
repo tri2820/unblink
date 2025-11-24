@@ -1,5 +1,4 @@
 import fs from "fs/promises";
-import type { WorkerState } from "~/backend/worker/worker_state";
 import type { AVPixelFormat, AVSampleFormat, CodecContext, Frame, Packet, Stream } from "node-av";
 import {
     AV_CODEC_ID_AAC,
@@ -41,10 +40,10 @@ import {
     Rational,
 } from "node-av";
 import path from "path";
-import { v4 as uuid } from 'uuid';
-import { FRAMES_DIR, MOMENTS_DIR, RECORDINGS_DIR } from "~/backend/appdir";
+import { MOMENTS_DIR } from "~/backend/appdir";
 import { logger as _logger } from "~/backend/logger";
-import type { StreamMessage } from "~/shared";
+import type { WorkerState } from "~/backend/worker/worker_state";
+import type { ServerToWorkerStreamMessage_Add_Stream, StreamMessage } from "~/shared";
 
 const logger = _logger.child({ worker: 'stream' });
 const MAX_SIZE = 720;
@@ -215,18 +214,8 @@ class OutputFile {
     }
 }
 
-
-
-export type StartStreamArg = {
-    id: string;
-    uri: string;
-    save_location?: string;
-    is_ephemeral?: boolean; // True for moment playback, false for live streams,
-    init_seek_sec?: number;
-}
-
 export async function streamMedia(
-    startArg: StartStreamArg,
+    startArg: ServerToWorkerStreamMessage_Add_Stream,
     onMessage: (msg: StreamMessage) => void,
     signal: AbortSignal,
     state$: () => WorkerState
@@ -457,7 +446,6 @@ export async function streamMedia(
 
                     onMessage({
                         type: 'moment_clip_saved' as const,
-                        media_id: startArg.id,
                         moment_id: momentOutput.output_id,
                         clip_path: finalPath,
                     });

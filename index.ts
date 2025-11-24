@@ -163,12 +163,12 @@ const server = Bun.serve({
             PUT: async ({ params, body }: { params: { id: string }, body: any }) => {
                 const { id } = params;
                 const data = await new Response(body).json();
-                const { name, uri, labels, saveToDisk, saveDir } = data;
+                const { name, uri, labels, save_to_disk, save_location } = data;
                 if (!name || !uri) {
                     return new Response('Missing name or uri', { status: 400 });
                 }
                 const updated_at = new Date();
-                await updateMedia(id, { name, uri, labels: labels ?? [], saveToDisk: saveToDisk ? 1 : 0, saveDir: saveDir ?? '' });
+                await updateMedia(id, { name, uri, labels: labels ?? [], save_to_disk: save_to_disk ? 1 : 0, save_location: save_location ?? '' });
                 return Response.json({ success: true });
             },
             DELETE: async ({ params }: { params: { id: string } }) => {
@@ -190,19 +190,19 @@ const server = Bun.serve({
                 }
 
                 const body = await req.json();
-                const { name, uri, labels, saveToDisk, saveDir } = body;
+                const { name, uri, labels, save_to_disk, save_location } = body;
                 if (!name || !uri) {
                     return new Response('Missing name or uri', { status: 400 });
                 }
                 const id = uuid();
-                await createMedia({ id, name, uri, labels: labels ?? [], updated_at: Date.now(), saveToDisk: saveToDisk ? 1 : 0, saveDir: saveDir ?? '' });
+                await createMedia({ id, name, uri, labels: labels ?? [], updated_at: Date.now(), save_to_disk: save_to_disk ? 1 : 0, save_location: save_location ?? '' });
 
                 logger.info(`New media added via API: ${name} (${id})`);
                 // Start the media stream
                 start_stream(worker_stream, {
                     id,
                     uri: uri as string,
-                    saveDir: saveDir as string,
+                    save_location: save_location as string,
                 });
 
                 return Response.json({ success: true, id });

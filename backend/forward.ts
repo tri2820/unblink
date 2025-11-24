@@ -59,8 +59,23 @@ export const createForwardFunction = (opts: ForwardingOpts) => {
 
         if (decoded.type === 'codec' || decoded.type === 'frame' || decoded.type === 'ended') {
             // Forward to clients
+
             for (const [, client] of opts.clients) {
-                client.send(decoded);
+                // Either subscribed ephemeral streams, or live streams (session_id is undefined)
+
+                if (decoded.is_ephemeral) {
+                    const stream_sub = client.subscription?.streams.find(s => s.type === 'ephemeral' && s.session_id === decoded.session_id);
+                    if (!stream_sub) continue;
+                    client.send(decoded);
+                } else {
+                    // // acknowledge to the client that we are sending frames intended for the latest session_id 
+                    // const session_id_from_subscription = client.subscription?.streams.find(s => s.id === decoded.id)?.session_id;
+                    // client.send({
+                    //     ...decoded,
+                    //     session_id: session_id_from_subscription,
+                    // });
+                    client.send(decoded);
+                }
             }
         }
 

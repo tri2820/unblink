@@ -22,8 +22,8 @@ export class WsClient {
         const ephemeral_subs = subscription?.streams.filter(s => s.type === 'ephemeral') || [];
 
         // We are comparing by session_id
-        const new_ephemeral_subs = ephemeral_subs.filter(s => !old_subscription?.streams.some(s2 => s2.session_id === s.session_id));
-        const old_ephemeral_subs = old_subscription?.streams.filter(s => s.type === 'ephemeral' && !subscription?.streams.some(s2 => s2.session_id === s.session_id)) || [];
+        const new_ephemeral_subs = ephemeral_subs.filter(s => !old_subscription?.streams.some(s2 => s2.type === 'ephemeral' && s2.session_id === s.session_id));
+        const old_ephemeral_subs = old_subscription?.streams.filter(s => s.type === 'ephemeral' && !subscription?.streams.some(s2 => s2.type === 'ephemeral' && s2.session_id === s.session_id)) || [];
 
         // logger.info({
         //     new_ephemeral_subs,
@@ -53,6 +53,7 @@ export class WsClient {
                         uri: moment.clip_path,
                         is_ephemeral: true,
                         init_seek_sec: new_sub.init_seek_sec,
+                        session_id: new_sub.session_id,
                     });
                 }
             }
@@ -70,27 +71,11 @@ export class WsClient {
 
     send(
         msg: ServerToClientMessage,
-        enforce_session_id: boolean = true,
     ) {
 
         if (this.destroyed) return;
 
-        // .send() usage is oblivious to session_id, only id is used to match subscription
-        // BUG: this does introduce a bug where where messages of old resources (e.g. moment with id=0 and param seek=0) is sent 
-        // to new subscription (moment with id=0 and param seek=10).
-        // Currently rely on the fact that old streams are killed off fast enough that they don't interefer with the new ones
-        // TODO: pass session_id to workers start stream args
-        let session_id = undefined;
-        if (msg.type === 'codec' || msg.type === 'frame') {
-            // BUG here (above)
-            const stream_sub = this._subscription?.streams.find(s => s.id === msg.id);
-            session_id = stream_sub?.session_id;
-        }
-
-        if (enforce_session_id && session_id === undefined) return;
-
         const send = {
-            session_id,
             ...msg,
         }
         const encoded = encode(send)
