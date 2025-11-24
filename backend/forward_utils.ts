@@ -1,62 +1,243 @@
-import { randomUUID } from "crypto";
-import type { ServerEphemeralState } from "~/shared";
-import { logger } from "./logger";
 import path from "path";
+import type { FrameStatsMessage, ObjectDetectionMessage, ServerEphemeralState, ServerToClientMessage } from "~/shared";
 import { FRAMES_DIR } from "./appdir";
-import { createMediaUnit } from "./database/utils";
+import { createMediaUnit, getMediaUnitById, updateMediaUnit } from "./database/utils";
+import type { ForwardingOpts } from "./forward";
+import { logger } from "./logger";
+import type { WebhookMessage } from "~/shared/alert";
+import { calculateFrameStats, type MomentData } from "./utils/frame_stats";
+import { set_moment_state } from "./worker_connect/worker_stream_connector";
+import { handleMoment } from "./utils/handle_moment";
 
 export type Builder = {
-    keys: string[],
+    worker_types: string[],
     interval: number,
     should_run: (props: { in_moment: boolean, last_time_run: number }) => boolean,
-    write?: (media_id: string, media_unit_id: string, data: Uint8Array) => Promise<void>
+    write?: (media_id: string, media_unit_id: string, data: Uint8Array) => Promise<void>,
+    mk_cont: (props: { worker_type: string, media_id: string, media_unit_id: string }) => (output: any) => Promise<void>,
+
 };
 
-export const builders: { [builder_id: string]: Builder } = {
-    'indexing': {
-        keys: ['vlm', 'embedding'],
-        interval: 3000,
-        should_run({ in_moment, last_time_run }) {
-            if (in_moment) return true;
-            const now = Date.now();
+export const create_builders: (
+    opts: ForwardingOpts,
 
-            // Ocassionally run every minute
-            return now - last_time_run > 60000
+) => { [builder_id: string]: Builder } = (opts) => {
+    return {
+        'indexing': {
+            worker_types: ['caption', 'embedding'],
+            interval: 3000,
+            should_run({ in_moment, last_time_run }) {
+                if (in_moment) return true;
+                const now = Date.now();
+
+                // Ocassionally run every minute
+                return now - last_time_run > 60000
+            },
+            async write(media_id: string, media_unit_id: string, data: Uint8Array) {
+                // Write data to file
+                const _path = path.join(FRAMES_DIR, `${media_unit_id}.jpg`);
+                await Bun.write(_path, data);
+
+                // Store in database
+                const mu = {
+                    id: media_unit_id,
+                    type: 'frame',
+                    at_time: Date.now(), // Using timestamp instead of Date object
+                    description: null,
+                    embedding: null,
+                    media_id,
+                    path: _path,
+                };
+                await createMediaUnit(mu)
+            },
+            mk_cont({ worker_type, media_id, media_unit_id }) {
+                return async (output: any) => {
+                    if (
+                        worker_type == 'caption'
+                    ) {
+                        let description = output.response;
+
+                        // Try to remove common prefixes
+                        // E.g., "This image depicts ...", "This image captures ...", "In this image, ", "The image shows ...", "The image captures ..."
+                        const prefixes = [
+                            "This is an image of a ",
+                            "The image is ",
+                            "The image depicts ",
+                            "The image captures ",
+                            "This image depicts ",
+                            "This image captures ",
+                            "In this image, ",
+                            "The image shows ",
+                            "The image captures ",
+                            "This photo depicts ",
+                            "This photo captures ",
+                            "In this photo, ",
+                            "The photo shows ",
+                            "The photo captures ",
+                        ];
+                        for (const prefix of prefixes) {
+                            if (description.startsWith(prefix)) {
+                                description = description.slice(prefix.length);
+                                // Properly capitalize first letter
+                                description = description.charAt(0).toUpperCase() + description.slice(1);
+                                break;
+                            }
+                        }
+
+                        const mu = await getMediaUnitById(media_unit_id);
+                        if (!mu) {
+                            logger.error(`MediaUnit not found for media_unit_id ${media_unit_id}`);
+                            return;
+                        }
+
+                        const msg: ServerToClientMessage = {
+                            type: 'agent_card',
+                            media_unit: {
+                                ...mu,
+                                description,
+                            }
+                        }
+
+                        // Forward to clients 
+                        for (const [id, client] of opts.clients.entries()) {
+                            client.send(msg);
+                        }
+
+                        // Also forward to webhook
+                        opts.forward_to_webhook({
+                            event: 'description',
+                            created_at: new Date().toISOString(),
+                            media_unit_id: mu.id,
+                            media_id: mu.media_id,
+                            description,
+                        });
+                    }
+
+                    if (
+                        worker_type == 'embedding'
+                    ) {
+                        // Convert number[] to Uint8Array for database storage
+                        const embeddingBuffer = output.embedding ? new Uint8Array(new Float32Array(output.embedding).buffer) : null;
+
+                        // Store in database
+                        updateMediaUnit(media_unit_id, {
+                            embedding: embeddingBuffer,
+                        })
+                    }
+                }
+            },
         },
-        async write(media_id: string, media_unit_id: string, data: Uint8Array) {
-            // Write data to file
-            const _path = path.join(FRAMES_DIR, `${media_unit_id}.jpg`);
-            await Bun.write(_path, data);
+        'object_detection': {
+            worker_types: ['object_detection'],
+            interval: 1000,
+            should_run({ in_moment }) {
+                return true
+            },
+            mk_cont({ media_id, media_unit_id }) {
+                return async (output: any) => {
+                    const msg: ObjectDetectionMessage = {
+                        type: 'object_detection',
+                        media_id,
+                        media_unit_id,
+                        detections: output.detections,
+                    }
+                    opts.forward_to_webhook({
+                        ...msg,
+                        created_at: new Date().toISOString(),
+                    });
 
-            // Store in database
-            const mu = {
-                id: media_unit_id,
-                type: 'frame',
-                at_time: Date.now(), // Using timestamp instead of Date object
-                description: null,
-                embedding: null,
-                media_id,
-                path: _path,
-            };
+                    // Forward to clients
+                    for (const [, client] of opts.clients.entries()) {
+                        client.send(msg);
+                    }
+                }
+            },
+        },
+        'motion_energy': {
+            worker_types: ['motion_energy'],
+            interval: 1000,
+            should_run() {
+                return true
+            },
+            mk_cont({ media_id, media_unit_id }) {
+                return async (output: any) => {
 
-            await createMediaUnit(mu)
+                    const state = opts.state();
+
+                    // Moment detection handler
+                    const onMoment = (moment: MomentData) => {
+                        // Get the moment ID from state (it was set when maybe moment started)
+                        const momentId = state.current_moment_ids.get(media_id) || null;
+                        handleMoment(moment, state, momentId);
+                    };
+
+                    // Calculate frame stats with moment detection
+                    const frameStats = calculateFrameStats(
+                        state.stream_stats_map,
+                        media_id,
+                        media_unit_id,
+                        output.motion_energy,
+                        Date.now(),
+                        onMoment,
+                        // onMaybeMomentStart
+                        () => {
+                            // Generate moment ID upfront and store in state
+                            const newMomentId = crypto.randomUUID();
+                            state.current_moment_ids.set(media_id, newMomentId);
+
+                            logger.info(`Maybe moment started for ${media_id}, moment_id: ${newMomentId}`);
+                            state.active_moments.add(media_id);
+
+                            // Forward to worker to start recording moment clip with the moment ID
+                            set_moment_state(opts.worker_stream(), {
+                                media_id,
+                                should_write_moment: true,
+                                current_moment_id: newMomentId,
+                            });
+                        },
+                        // onMaybeMomentEnd
+                        (isMoment) => {
+                            logger.info(`Maybe moment ended for ${media_id}. Was moment: ${isMoment}`);
+                            state.active_moments.delete(media_id);
+
+                            // Forward to worker to stop recording moment clip
+                            // If it wasn't actually a moment, tell worker to delete the file
+                            set_moment_state(opts.worker_stream(), {
+                                media_id,
+                                should_write_moment: false,
+                                discard_previous_maybe_moment: !isMoment, // Delete if it was NOT a real moment
+                            });
+
+                            // Clear the moment ID from state after use
+                            state.current_moment_ids.delete(media_id);
+                        }
+                    );
+
+                    // Create frame_stats message
+                    const statsMessage: FrameStatsMessage = {
+                        type: 'frame_stats' as const,
+                        media_id,
+                        frame_id: media_unit_id,
+                        motion_energy: frameStats.motion_energy,
+                        sma10: frameStats.sma10,
+                        sma100: frameStats.sma100,
+                        timestamp: Date.now(),
+                    };
+
+                    // Forward to clients
+                    for (const [, client] of opts.clients.entries()) {
+                        client.send(statsMessage);
+                    }
+
+                    // Only 1000 max
+                    state.frame_stats_messages.push(statsMessage);
+                    state.frame_stats_messages = state.frame_stats_messages.slice(-1000);
+
+                }
+            },
         }
-    },
-    'object_detection': {
-        keys: ['object_detection'],
-        interval: 1000,
-        should_run({ in_moment }) {
-            return true
-        },
-    },
-    'motion_energy': {
-        keys: ['motion_energy'],
-        interval: 1000,
-        should_run() {
-            return true
-        },
     }
-};
+}
 
 export function updateMomentFrames(
     state: ServerEphemeralState,

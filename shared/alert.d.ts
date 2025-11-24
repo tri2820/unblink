@@ -1,18 +1,11 @@
+import type { ObjectDetectionMessage } from ".";
+
 // Webhook Contract
-export type WebhookMessage = {
+export type WebhookMessage = ({
     event: 'description',
-    data: {
-        created_at: string;
-        media_id: string;
-        frame_id: string;
-        description: string;
-    }
-} | {
-    type: 'object_detection';
-    data: {
-        created_at: string;
-        media_id: string;
-        frame_id: string;
-        objects: DetectionObject[];
-    }
+    media_id: string;
+    media_unit_id: string;
+    description: string;
+} | ObjectDetectionMessage) & {
+    created_at: string;
 }

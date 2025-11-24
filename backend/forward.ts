@@ -1,15 +1,13 @@
 import type { ServerWebSocket } from "bun";
 import { decode } from "cbor-x";
 import { randomUUID } from "crypto";
-import type { WorkerToServerMessage } from "~/shared";
+import type { InMemWorkerRequest, WorkerToServerMessage } from "~/shared";
 import type { WebhookMessage } from "~/shared/alert";
-import type { Conn } from "~/shared/Conn";
-import type { EngineToServer, ServerToEngine } from "~/shared/engine";
 import { updateMoment } from "./database/utils";
 import type { WsClient } from "./WsClient";
 
 import type { ServerEphemeralState } from "~/shared";
-import { builders, updateMomentFrames } from "./forward_utils";
+import { create_builders, updateMomentFrames } from "./forward_utils";
 import { logger } from "./logger";
 
 type ForwardingState = {
@@ -20,10 +18,11 @@ type ForwardingState = {
     }
 };
 
-type ForwardingOpts = {
+export type ForwardingOpts = {
+    worker_stream: () => Worker,
     clients: Map<ServerWebSocket, WsClient>,
     settings: () => Record<string, string>,
-    engine_conn: () => Conn<ServerToEngine, EngineToServer>,
+    send_to_engine: (msg: InMemWorkerRequest) => void,
     forward_to_webhook: (msg: WebhookMessage) => Promise<void>,
     state: () => ServerEphemeralState,
 };
@@ -62,37 +61,32 @@ export const createForwardFunction = (opts: ForwardingOpts) => {
 
             for (const [, client] of opts.clients) {
                 // Either subscribed ephemeral streams, or live streams (session_id is undefined)
-
                 if (decoded.is_ephemeral) {
                     const stream_sub = client.subscription?.streams.find(s => s.type === 'ephemeral' && s.session_id === decoded.session_id);
                     if (!stream_sub) continue;
-                    client.send(decoded);
-                } else {
-                    // // acknowledge to the client that we are sending frames intended for the latest session_id 
-                    // const session_id_from_subscription = client.subscription?.streams.find(s => s.id === decoded.id)?.session_id;
-                    // client.send({
-                    //     ...decoded,
-                    //     session_id: session_id_from_subscription,
-                    // });
-                    client.send(decoded);
                 }
+
+                client.send(decoded);
             }
         }
 
         // logger.info({ decoded_is_ephemeral: decoded.is_ephemeral }, 'Forwarding message');
         if (decoded.type === 'frame' && !decoded.is_ephemeral) {
             const media_unit_id = randomUUID();
-            const msg: ServerToEngine = {
-                frame: decoded.data,
-                frame_id: media_unit_id,
-                media_id: decoded.id,
-                type: 'frame_binary',
-                workers: {}
+            const req: InMemWorkerRequest = {
+                jobs: [],
+                type: 'worker_request',
+                resources: [{
+                    id: media_unit_id,
+                    type: 'image',
+                    data: decoded.data
+                }],
             }
 
             const in_moment = opts.state().active_moments.has(decoded.id);
             maybeInitState(decoded.id)
             const now = Date.now();
+            const builders = create_builders(opts)
             for (const [builder_id, builder] of Object.entries(builders)) {
                 const last_time_run = state.streams[decoded.id]![builder_id] ?? 0;
                 if (!builder.should_run({ in_moment, last_time_run })) continue;
@@ -103,13 +97,22 @@ export const createForwardFunction = (opts: ForwardingOpts) => {
                 //     logger.info({ media_id: decoded.id }, 'Indexing ...')
                 // }
                 await builder.write?.(decoded.id, media_unit_id, decoded.data)
-                for (const key of builder.keys) {
-                    msg.workers[key] = true;
+                for (const worker_type of builder.worker_types) {
+                    const cont = builder.mk_cont({ worker_type, media_id: decoded.id, media_unit_id })
+                    req.jobs.push({
+                        // Use media_id as cross_job_id to compare motion_energy between frames of this media
+                        cross_job_id: decoded.id,
+                        worker_type: worker_type as any,
+                        resources: [{
+                            id: media_unit_id,
+                        }],
+                        cont
+                    });
                 }
             }
 
-            if (Object.values(msg.workers).length > 0) {
-                opts.engine_conn().send(msg);
+            if (req.jobs.length > 0) {
+                opts.send_to_engine(req)
             }
 
             // Buffer frames for moment enrichment

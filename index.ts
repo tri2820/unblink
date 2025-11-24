@@ -4,10 +4,9 @@ import path from "node:path";
 import { v4 as uuid } from 'uuid';
 import { admin } from "./admin";
 import { WsClient } from "./backend/WsClient";
-import { FRAMES_DIR, RECORDINGS_DIR, RUNTIME_DIR } from "./backend/appdir";
+import { FRAMES_DIR, RUNTIME_DIR } from "./backend/appdir";
 import { auth_required, verifyPassword } from "./backend/auth";
-import { closeDb } from "./backend/database/database";
-import { createMedia, createSession, deleteMedia, deleteSession, getAllMedia, getAllMoments, getAllSettings as getAllSettingsDB, getAllUsers, getByQuery, getFirstMediaUnitInTimeRange, getMediaUnitsByEmbedding, getMomentById, getUserByUsername as getUserByUsernameDB, setSetting as setSettingDB, updateMedia } from "./backend/database/utils";
+import { createMedia, createSession, deleteMedia, deleteSession, getAllMedia, getAllMoments, getAllSettings as getAllSettingsDB, getAllUsers, getByQuery, getMediaUnitsByEmbedding, getMomentById, getUserByUsername as getUserByUsernameDB, setSetting as setSettingDB, updateMedia } from "./backend/database/utils";
 import { createForwardFunction } from "./backend/forward";
 import { logger } from "./backend/logger";
 import { check_version } from "./backend/startup/check_version";
@@ -16,9 +15,11 @@ import { load_secrets } from "./backend/startup/load_secrets";
 import { load_settings } from "./backend/startup/load_settings";
 import { create_webhook_forward } from "./backend/webhook";
 import { spawn_worker } from "./backend/worker_connect/shared";
-import { start_stream, start_streams, stop_stream } from "./backend/worker_connect/worker_stream_connector";
+import { start_stream, start_streams } from "./backend/worker_connect/worker_stream_connector";
 import homepage from "./index.html";
-import type { ClientToServerMessage, DbUser, RESTQuery, ServerEphemeralState, Subscription } from "./shared";
+import type { ClientToServerMessage, DbUser, InMemWorkerRequest, RESTQuery, ServerEphemeralState } from "./shared";
+import { randomUUID } from "node:crypto";
+import type { WorkerRequest } from "./shared/engine";
 
 // ... (rest of imports)
 
@@ -44,6 +45,7 @@ const forward_to_webhook = create_webhook_forward({ settings });
 // For things we don't want to persist in database 
 // But want to be readily available upon new client connections
 const state: ServerEphemeralState = {
+    remote_worker_jobs_cont: new Map(),
     frame_stats_messages: [],
     stream_stats_map: new Map(),
     active_moments: new Set(),
@@ -53,8 +55,32 @@ const state: ServerEphemeralState = {
 
 const handleMessage = createForwardFunction({
     clients,
+    worker_stream: () => worker_stream,
     settings,
-    engine_conn: () => engine_conn,
+    send_to_engine: (req: InMemWorkerRequest) => {
+        const serializable_req: WorkerRequest = {
+            jobs: [],
+            type: 'worker_request',
+            resources: req.resources
+        }
+
+        for (const job of req.jobs) {
+            const _cont = job.cont;
+            const serializable_job = {
+                cross_job_id: job.cross_job_id,
+                worker_type: job.worker_type,
+                resources: job.resources,
+                job_id: randomUUID()
+            }
+
+            serializable_req.jobs.push(serializable_job)
+            state.remote_worker_jobs_cont.set(serializable_job.job_id, (output) => {
+                _cont(output)
+            })
+        }
+
+        engine_conn.send(serializable_req);
+    },
     forward_to_webhook,
     state: () => state,
 })

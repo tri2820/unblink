@@ -4,26 +4,30 @@ export type ServerRegistrationMessage = {
     token?: string;
 }
 
-export type ServerToEngine =
-    | {
-        type: "frame_binary";
-        workers: {
-            [worker_id: string]: true
-        }
-        frame_id: string;
-        media_id: string;
-        frame: Uint8Array;
-    } | {
-        type: "moment_enrichment",
-        media_id: string;
-        moment_id: string;
-        media_units: {
-            id: string;
-            at_time: number;
-            data: Uint8Array;
-            type: 'frame'
-        }[]
-    }
+export type RemoteJob = {
+    job_id: string,
+    worker_type: 'caption' | 'embedding' | 'object_detection' | 'motion_energy',
+    cross_job_id?: string,
+    resources?: {
+        id: string,
+    }[]
+}
+
+export type WorkerRequest = {
+    type: "worker_request",
+    resources?: {
+        id: string,
+        type: 'image',
+        data: Uint8Array,
+    }[],
+    jobs: RemoteJob[]
+}
+
+export type WorkerResponse = {
+    type: "worker_response",
+    output: any,
+    job_id: string,
+}
 
 export type DetectionObject = {
     label: string;
@@ -36,30 +40,7 @@ export type DetectionObject = {
     }
 }
 
-export type EngineToServer = {
-    type: "frame_description";
-    frame_id: string;
-    media_id: string;
-    description: string;
-} | {
-    type: "frame_embedding";
-    frame_id: string;
-    media_id: string;
-    embedding: number[];
-} | {
-    type: "frame_object_detection";
-    media_id: string;
-    frame_id: string;
-    objects: DetectionObject[];
-} | {
-    type: "moment_enrichment",
-    media_id: string;
-    moment_id: string;
-    enrichment: {
-        title: string;
-        description: string;
-    }
-} | FrameMotionEnergyMessage
+export type EngineToServer = WorkerResponse
 
 export type FrameMotionEnergyMessage = {
     type: "frame_motion_energy";
@@ -76,8 +57,8 @@ export type Moment = {
     peak_deviation?: number | null;
     type?: string | null;
     title?: string | null;
-    description?: string | null;
-    clip_path?: string | null;
+    short_description?: string | null;
+    long_description?: string | null;
 }
 export type Summary = {
     background: string;

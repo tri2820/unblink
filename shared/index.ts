@@ -1,6 +1,6 @@
 
 import type { MediaUnit } from "./database";
-import type { EngineToServer } from "./engine";
+import type { DetectionObject, EngineToServer, WorkerRequest, WorkerResponse } from "./engine";
 
 // Frame stats message - calculated on backend from frame_motion_energy
 export type FrameStatsMessage = {
@@ -13,11 +13,6 @@ export type FrameStatsMessage = {
     timestamp: number; // Unix timestamp in milliseconds
 }
 
-// export type FrameMessage = {
-//     type: "frame_file";
-//     frame_id: string;
-//     path: string;
-// }
 
 export type StreamMessage = {
     type: "codec";
@@ -40,6 +35,13 @@ export type StreamMessage = {
 } | {
     type: 'ended';
 };
+
+export type ObjectDetectionMessage = {
+    type: 'object_detection';
+    media_id: string;
+    media_unit_id: string;
+    detections: DetectionObject[];
+}
 
 
 export type Subscription = {
@@ -64,7 +66,7 @@ export type ClientToServerMessage = {
 export type WorkerToServerMessage =
     // WorkerObjectDetectionToServerMessage | 
     WorkerStreamToServerMessage
-export type ServerToClientMessage = (WorkerToServerMessage | EngineToServer | FrameStatsMessage | {
+export type ServerToClientMessage = (WorkerToServerMessage | ObjectDetectionMessage | FrameStatsMessage | {
     type: 'agent_card';
     media_unit: MediaUnit;
 }) & {
@@ -107,19 +109,6 @@ export type ServerToWorkerStreamMessage =
     | ServerToWorkerStreamMessage_Stop_Stream
     | ServerToWorkerStreamMessage_Set_Moment_State
 
-// export type ServerToWorkerObjectDetectionMessage = {
-//     media_id: string;
-//     file_name?: string;
-// } & FrameMessage
-
-// export type WorkerObjectDetectionToServerMessage = {
-//     type: 'object_detection';
-//     media_id: string;
-//     frame_id: string;
-//     file_name?: string;
-//     objects: DetectionObject[];
-// }
-
 
 
 export type User = Pick<DbUser, 'id' | 'username' | 'role'>;
@@ -153,6 +142,7 @@ export type RESTQuery = {
 }
 
 export type ServerEphemeralState = {
+    remote_worker_jobs_cont: Map<string, (output: any) => void>
     frame_stats_messages: FrameStatsMessage[];
     stream_stats_map: Map<string, {
         last10: number[];
@@ -171,3 +161,9 @@ export type ServerEphemeralState = {
     moment_frames: Map<string, { id: string, at_time: number, data: Uint8Array }[]>;
     current_moment_ids: Map<string, string>; // media_id -> moment_id for active moments
 };
+export type InMemWorkerRequest = Omit<WorkerRequest, 'jobs'> & {
+    jobs: (Omit<WorkerRequest['jobs'][number], 'job_id'> & {
+        cont: (output: any) => void;
+    })[];
+};
+

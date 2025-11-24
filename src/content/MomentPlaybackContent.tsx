@@ -238,7 +238,11 @@ export default function MomentPlaybackContent() {
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            pauseVideo();
+                                                            if (state() === 'playing') {
+                                                                pauseVideo()
+                                                            } else if (state() === 'pausing') {
+                                                                playFrom(currentTimeMs())
+                                                            }
                                                         }}
                                                         class="text-white hover:text-gray-200 transition-colors"
                                                     >

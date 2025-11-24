@@ -1,14 +1,10 @@
 import type { ServerWebSocket } from "bun";
 
-import type { ServerEphemeralState, ServerToClientMessage } from "~/shared";
+import type { ServerEphemeralState } from "~/shared";
 import type { WebhookMessage } from "~/shared/alert";
 import { Conn } from "~/shared/Conn";
-import type { EngineToServer, ServerRegistrationMessage, ServerToEngine } from "~/shared/engine";
-import { createMoment, getMediaUnitById, updateMediaUnit, updateMoment } from "../database/utils";
+import type { EngineToServer, RemoteJob, ServerRegistrationMessage, WorkerRequest } from "~/shared/engine";
 import { logger } from "../logger";
-import { calculateFrameStats, type MomentData } from "../utils/frame_stats";
-import { handleMoment } from "../utils/handle_moment";
-import { set_moment_state } from "../worker_connect/worker_stream_connector";
 import type { WsClient } from "../WsClient";
 
 
@@ -19,7 +15,7 @@ export function connect_to_engine(props: {
     clients: () => Map<ServerWebSocket, WsClient>,
     worker_stream: Worker,
 }) {
-    const engine_conn = new Conn<ServerRegistrationMessage | ServerToEngine, EngineToServer>(`wss://${props.ENGINE_URL}/ws`, {
+    const engine_conn = new Conn<ServerRegistrationMessage | WorkerRequest, EngineToServer>(`wss://${props.ENGINE_URL}/ws`, {
         onOpen() {
             const msg: ServerRegistrationMessage = {
                 type: "i_am_server",
@@ -34,153 +30,17 @@ export function connect_to_engine(props: {
             logger.error(event, "WebSocket to engine error:");
         },
         async onMessage(decoded) {
-
-            if (decoded.type === 'frame_description') {
-                // Store in database
-                // logger.info({ decoded }, `Received description`);
-                updateMediaUnit(decoded.frame_id, {
-                    description: decoded.description,
-                })
-
-                const mu = await getMediaUnitById(decoded.frame_id);
-                if (!mu) {
-                    logger.error(`MediaUnit not found for frame_id ${decoded.frame_id}`);
+            if (decoded.type === 'worker_response') {
+                const jobsMap = props.state().remote_worker_jobs_cont;
+                const cont = jobsMap.get(decoded.job_id);
+                if (!cont) {
+                    logger.error(`No continuation found for job_id ${decoded.job_id}`);
                     return;
                 }
 
-                const msg: ServerToClientMessage = {
-                    type: 'agent_card',
-                    media_unit: {
-                        ...mu,
-                        description: decoded.description,
-                    }
-                }
-
-                // Forward to clients 
-                for (const [id, client] of props.clients()) {
-                    client.send(msg);
-                }
-
-                // Also forward to webhook
-                props.forward_to_webhook({
-                    event: 'description',
-                    data: {
-                        created_at: new Date().toISOString(),
-                        media_id: decoded.media_id,
-                        frame_id: decoded.frame_id,
-                        description: decoded.description,
-                    }
-                });
-            }
-
-            if (decoded.type === 'frame_embedding') {
-                // Convert number[] to Uint8Array for database storage
-                const embeddingBuffer = decoded.embedding ? new Uint8Array(new Float32Array(decoded.embedding).buffer) : null;
-
-                // Store in database
-                updateMediaUnit(decoded.frame_id, {
-                    embedding: embeddingBuffer,
-                })
-            }
-
-            if (decoded.type === 'frame_object_detection') {
-                // // Also forward to webhook
-                const msg: WebhookMessage = {
-                    type: 'object_detection',
-                    data: {
-                        created_at: new Date().toISOString(),
-                        media_id: decoded.media_id,
-                        frame_id: decoded.frame_id,
-                        objects: decoded.objects,
-                    }
-                }
-                props.forward_to_webhook(msg);
-
-                // Forward to clients
-                for (const [, client] of props.clients()) {
-                    client.send(decoded);
-                }
-            }
-
-            if (decoded.type === 'moment_enrichment') {
-                logger.info({ decoded }, `Received moment enrichment`);
-                await updateMoment(decoded.moment_id, {
-                    title: decoded.enrichment.title,
-                    description: decoded.enrichment.description,
-                });
-            }
-
-            if (decoded.type === 'frame_motion_energy') {
-                const state = props.state();
-
-                // Moment detection handler
-                const onMoment = (moment: MomentData) => {
-                    // Get the moment ID from state (it was set when maybe moment started)
-                    const momentId = state.current_moment_ids.get(decoded.media_id) || null;
-                    handleMoment(moment, state, engine_conn, momentId);
-                };
-
-                // Calculate frame stats with moment detection
-                const frameStats = calculateFrameStats(
-                    state.stream_stats_map,
-                    decoded.media_id,
-                    decoded.frame_id,
-                    decoded.motion_energy,
-                    Date.now(),
-                    onMoment,
-                    // onMaybeMomentStart
-                    () => {
-                        // Generate moment ID upfront and store in state
-                        const newMomentId = crypto.randomUUID();
-                        state.current_moment_ids.set(decoded.media_id, newMomentId);
-
-                        logger.info(`Maybe moment started for ${decoded.media_id}, moment_id: ${newMomentId}`);
-                        state.active_moments.add(decoded.media_id);
-
-                        // Forward to worker to start recording moment clip with the moment ID
-                        set_moment_state(props.worker_stream, {
-                            media_id: decoded.media_id,
-                            should_write_moment: true,
-                            current_moment_id: newMomentId,
-                        });
-                    },
-                    // onMaybeMomentEnd
-                    (isMoment) => {
-                        logger.info(`Maybe moment ended for ${decoded.media_id}. Was moment: ${isMoment}`);
-                        state.active_moments.delete(decoded.media_id);
-
-                        // Forward to worker to stop recording moment clip
-                        // If it wasn't actually a moment, tell worker to delete the file
-                        set_moment_state(props.worker_stream, {
-                            media_id: decoded.media_id,
-                            should_write_moment: false,
-                            discard_previous_maybe_moment: !isMoment, // Delete if it was NOT a real moment
-                        });
-
-                        // Clear the moment ID from state after use
-                        state.current_moment_ids.delete(decoded.media_id);
-                    }
-                );
-
-                // Create frame_stats message
-                const statsMessage = {
-                    type: 'frame_stats' as const,
-                    media_id: decoded.media_id,
-                    frame_id: decoded.frame_id,
-                    motion_energy: frameStats.motion_energy,
-                    sma10: frameStats.sma10,
-                    sma100: frameStats.sma100,
-                    timestamp: Date.now(),
-                };
-
-                // Forward to clients
-                for (const [, client] of props.clients()) {
-                    client.send(statsMessage);
-                }
-
-                // Only 1000 max
-                state.frame_stats_messages.push(statsMessage);
-                state.frame_stats_messages = state.frame_stats_messages.slice(-1000);
+                cont(decoded.output);
+                // Remove continuation
+                jobsMap.delete(decoded.job_id);
             }
         }
     });
