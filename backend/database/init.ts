@@ -111,8 +111,7 @@ export async function initDatabase(client: Database) {
                 peak_deviation REAL,
                 type TEXT,
                 title TEXT,
-                short_description TEXT,
-                long_description TEXT,
+                description TEXT,
                 clip_path TEXT,
                 thumbnail_path TEXT
             );

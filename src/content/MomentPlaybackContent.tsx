@@ -147,7 +147,7 @@ export default function MomentPlaybackContent() {
                                     {m().title || "Untitled Moment"}
                                 </h2>
                                 <p class="text-sm text-neu-400">
-                                    {m().short_description || "No description available"}
+                                    {m().description || "No description available"}
                                 </p>
                                 <div class="mt-2 text-xs text-neu-500">
                                     <span>{new Date(m().start_time).toLocaleString()}</span>

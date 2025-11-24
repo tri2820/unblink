@@ -52,8 +52,7 @@ export interface Moment {
     peak_deviation?: number | null;
     type?: string | null;
     title?: string | null;
-    short_description?: string | null;
-    long_description?: string | null;
+    description?: string | null;
     clip_path?: string | null;
     thumbnail_path?: string | null;
 }

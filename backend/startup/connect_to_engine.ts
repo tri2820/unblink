@@ -106,8 +106,7 @@ export function connect_to_engine(props: {
                 logger.info({ decoded }, `Received moment enrichment`);
                 await updateMoment(decoded.moment_id, {
                     title: decoded.enrichment.title,
-                    short_description: decoded.enrichment.short_description,
-                    long_description: decoded.enrichment.long_description,
+                    description: decoded.enrichment.description,
                 });
             }
 

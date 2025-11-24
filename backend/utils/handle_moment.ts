@@ -46,8 +46,7 @@ export async function handleMoment(
             peak_deviation: moment.peak_deviation,
             type: moment.type,
             title: null,
-            short_description: null,
-            long_description: null,
+            description: null,
             clip_path: null,
             thumbnail_path: thumbnailPath,
         });

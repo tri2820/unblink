@@ -47,7 +47,7 @@ export default function MomentsContent() {
                                             {moment.title || "Untitled Moment"}
                                         </h3>
                                         <p class="text-sm text-neu-400 line-clamp-2">
-                                            {moment.short_description || "No description available"}
+                                            {moment.description || "No description available"}
                                         </p>
                                         <div class="mt-3 flex items-center justify-between text-xs text-neu-500">
                                             <span>{new Date(moment.start_time).toLocaleString()}</span>

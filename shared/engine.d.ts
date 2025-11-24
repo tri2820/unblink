@@ -57,8 +57,7 @@ export type EngineToServer = {
     moment_id: string;
     enrichment: {
         title: string;
-        short_description: string;
-        long_description: string;
+        description: string;
     }
 } | FrameMotionEnergyMessage
 
@@ -77,8 +76,7 @@ export type Moment = {
     peak_deviation?: number | null;
     type?: string | null;
     title?: string | null;
-    short_description?: string | null;
-    long_description?: string | null;
+    description?: string | null;
     clip_path?: string | null;
 }
 export type Summary = {

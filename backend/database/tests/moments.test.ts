@@ -42,8 +42,7 @@ test("Create a new moment", async () => {
         peak_deviation: 1.5,
         type: 'standard',
         title: null,
-        short_description: null,
-        long_description: null
+        description: null
     });
     const moment = await getMomentById(momentId);
     expect(moment).toBeDefined();
@@ -69,8 +68,7 @@ test("Get moment by ID", async () => {
         peak_deviation: 0.8,
         type: 'instant',
         title: null,
-        short_description: null,
-        long_description: null
+        description: null
     });
     const moment = await getMomentById(momentId);
     expect(moment).toBeDefined();
@@ -90,19 +88,18 @@ test("Update moment", async () => {
         peak_deviation: 0.5,
         type: 'standard',
         title: null,
-        short_description: null,
-        long_description: null
+        description: null
     });
 
     await updateMoment(momentId, {
         title: 'Person entering',
-        short_description: 'A person entered the room',
+        description: 'A person entered the room',
         peak_deviation: 1.2
     });
 
     const updatedMoment = await getMomentById(momentId);
     expect(updatedMoment?.title).toBe('Person entering');
-    expect(updatedMoment?.short_description).toBe('A person entered the room');
+    expect(updatedMoment?.description).toBe('A person entered the room');
     expect(updatedMoment?.peak_deviation).toBe(1.2);
 
     await deleteMoment(momentId);
@@ -118,8 +115,7 @@ test("Delete moment and verify", async () => {
         peak_deviation: 0.3,
         type: 'standard',
         title: null,
-        short_description: null,
-        long_description: null
+        description: null
     });
 
     const moment = await getMomentById(momentId);
@@ -143,8 +139,7 @@ test("Get moments by media ID", async () => {
         peak_deviation: 0.5,
         type: 'standard',
         title: null,
-        short_description: null,
-        long_description: null
+        description: null
     });
 
     await createMoment({
@@ -155,8 +150,7 @@ test("Get moments by media ID", async () => {
         peak_deviation: 0.6,
         type: 'instant',
         title: null,
-        short_description: null,
-        long_description: null
+        description: null
     });
 
     const moments = await getMomentsByMediaId(testMediaId);
@@ -180,8 +174,7 @@ test("Create moment with thumbnail path", async () => {
         peak_deviation: 1.0,
         type: 'standard',
         title: null,
-        short_description: null,
-        long_description: null,
+        description: null,
         thumbnail_path: thumbnailPath
     });
     const moment = await getMomentById(momentId);
