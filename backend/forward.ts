@@ -76,6 +76,7 @@ export const createForwardFunction = (opts: ForwardingOpts) => {
             const req: InMemWorkerRequest = {
                 jobs: [],
                 type: 'worker_request',
+                // Shared image resource for all jobs
                 resources: [{
                     id: media_unit_id,
                     type: 'image',
@@ -98,17 +99,20 @@ export const createForwardFunction = (opts: ForwardingOpts) => {
                 // }
                 await builder.write?.(decoded.id, media_unit_id, decoded.data)
                 for (const worker_type of builder.worker_types) {
-                    const cont = builder.mk_cont({ worker_type, media_id: decoded.id, media_unit_id })
-                    req.jobs.push({
 
-                        worker_type: worker_type as any,
-                        resources: [{
-                            id: media_unit_id,
-                        }],
-                        cont,
-                        // Use media_id as cross_job_id to compare motion_energy between frames of this media
-                        ...(worker_type == 'motion_energy' ? { cross_job_id: decoded.id } : {})
-                    });
+                    const job = await builder.build({ worker_type, media_id: decoded.id, media_unit_id });
+                    req.jobs.push(job);
+
+                    // const cont = builder.mk_cont({ worker_type, media_id: decoded.id, media_unit_id })
+                    // req.jobs.push({
+                    //     worker_type: worker_type as any,
+                    //     resources: [{
+                    //         id: media_unit_id,
+                    //     }],
+                    //     cont,
+                    //     // Use media_id as cross_job_id to compare motion_energy between frames of this media
+                    //     ...(worker_type == 'motion_energy' ? { cross_job_id: decoded.id } : {})
+                    // });
                 }
             }
 

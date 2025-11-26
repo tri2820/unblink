@@ -4,19 +4,19 @@ import { createEffect, createSignal, onCleanup, onMount, Show, type Accessor } f
 import { newMessage } from "./video/connection";
 import type { ServerToClientMessage, Subscription } from "~/shared";
 import { subscription } from "./shared";
-import type { DetectionObject } from "~/shared/engine";
+// import type { DetectionObject } from "~/shared/engine";
 
 class MjpegPlayer {
     private canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
     private img: HTMLImageElement | null = null;
-    private detectionObjects: DetectionObject[] = [];
+    // private detectionObjects: DetectionObject[] = [];
     private animationFrameId = 0;
     private isDestroyed = false;
     private sourceWidth = 0;
     private sourceHeight = 0;
     private onDrawingStateChange: (isDrawing: boolean) => void;
-    public _showDetections = true;
+    // public _showDetections = true;
     public cameraName: string | undefined;
     public rounded: boolean;
     private onTimestamp?: (timestamp: number) => void;
@@ -38,10 +38,10 @@ class MjpegPlayer {
     public handleMessage(message: ServerToClientMessage): void {
         if (this.isDestroyed) return;
 
-        if (message.type === 'object_detection') {
-            this.detectionObjects = message.detections;
-            return;
-        }
+        // if (message.type === 'object_detection') {
+        //     this.detectionObjects = message.detections;
+        //     return;
+        // }
 
         if (message.type === 'codec') {
             this.sourceWidth = message.width;
@@ -113,9 +113,9 @@ class MjpegPlayer {
             );
             this.ctx.restore();
 
-            if (this._showDetections) {
-                this.drawDetections(geom);
-            }
+            // if (this._showDetections) {
+            //     this.drawDetections(geom);
+            // }
 
             this.drawCameraName(geom);
         }
@@ -152,62 +152,62 @@ class MjpegPlayer {
         return { renderWidth, renderHeight, offsetX, offsetY };
     }
 
-    private drawDetections(geom: { renderWidth: number; renderHeight: number; offsetX: number; offsetY: number }) {
-        if (this.detectionObjects.length === 0 || !this.sourceWidth || !this.sourceHeight) return;
+    // private drawDetections(geom: { renderWidth: number; renderHeight: number; offsetX: number; offsetY: number }) {
+    //     if (this.detectionObjects.length === 0 || !this.sourceWidth || !this.sourceHeight) return;
 
-        const videoWidth = this.sourceWidth;
-        const videoHeight = this.sourceHeight;
+    //     const videoWidth = this.sourceWidth;
+    //     const videoHeight = this.sourceHeight;
 
-        // IMPORTANT FIX: independent X/Y scaling
-        const scaleX = geom.renderWidth / videoWidth;
-        const scaleY = geom.renderHeight / videoHeight;
+    //     // IMPORTANT FIX: independent X/Y scaling
+    //     const scaleX = geom.renderWidth / videoWidth;
+    //     const scaleY = geom.renderHeight / videoHeight;
 
-        this.ctx.save();
-        this.ctx.strokeStyle = '#FF0000';
-        this.ctx.lineWidth = 2;
-        this.ctx.font = '14px Arial';
-        this.ctx.textBaseline = 'bottom';
+    //     this.ctx.save();
+    //     this.ctx.strokeStyle = '#FF0000';
+    //     this.ctx.lineWidth = 2;
+    //     this.ctx.font = '14px Arial';
+    //     this.ctx.textBaseline = 'bottom';
 
-        this.detectionObjects.forEach(obj => {
-            const { x_min, y_min, x_max, y_max } = obj.box;
+    //     this.detectionObjects.forEach(obj => {
+    //         const { x_min, y_min, x_max, y_max } = obj.box;
 
-            // Correct projection into rendered+letterboxed canvas
-            const scaledX = geom.offsetX + x_min * scaleX;
-            const scaledY = geom.offsetY + y_min * scaleY;
-            const scaledWidth = (x_max - x_min) * scaleX;
-            const scaledHeight = (y_max - y_min) * scaleY;
-            // Draw the rectangle
-            this.ctx.strokeRect(
-                Math.floor(scaledX),
-                Math.floor(scaledY),
-                Math.floor(scaledWidth),
-                Math.floor(scaledHeight)
-            );
+    //         // Correct projection into rendered+letterboxed canvas
+    //         const scaledX = geom.offsetX + x_min * scaleX;
+    //         const scaledY = geom.offsetY + y_min * scaleY;
+    //         const scaledWidth = (x_max - x_min) * scaleX;
+    //         const scaledHeight = (y_max - y_min) * scaleY;
+    //         // Draw the rectangle
+    //         this.ctx.strokeRect(
+    //             Math.floor(scaledX),
+    //             Math.floor(scaledY),
+    //             Math.floor(scaledWidth),
+    //             Math.floor(scaledHeight)
+    //         );
 
-            // Label background & text
-            const text = `${obj.label} (${(obj.confidence * 100).toFixed(1)}%)`;
-            const textMetrics = this.ctx.measureText(text);
-            const textWidth = textMetrics.width;
-            const textHeight = 15;
+    //         // Label background & text
+    //         const text = `${obj.label} (${(obj.score * 100).toFixed(1)}%)`;
+    //         const textMetrics = this.ctx.measureText(text);
+    //         const textWidth = textMetrics.width;
+    //         const textHeight = 15;
 
-            const labelY = scaledY > textHeight + 5
-                ? scaledY
-                : scaledY + scaledHeight + textHeight;
+    //         const labelY = scaledY > textHeight + 5
+    //             ? scaledY
+    //             : scaledY + scaledHeight + textHeight;
 
-            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            this.ctx.fillRect(
-                Math.floor(scaledX),
-                Math.floor(labelY - textHeight),
-                Math.ceil(textWidth + 10),
-                Math.ceil(textHeight + 2)
-            );
+    //         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    //         this.ctx.fillRect(
+    //             Math.floor(scaledX),
+    //             Math.floor(labelY - textHeight),
+    //             Math.ceil(textWidth + 10),
+    //             Math.ceil(textHeight + 2)
+    //         );
 
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.fillText(text, scaledX + 5, labelY);
-        });
+    //         this.ctx.fillStyle = '#FFFFFF';
+    //         this.ctx.fillText(text, scaledX + 5, labelY);
+    //     });
 
-        this.ctx.restore();
-    }
+    //     this.ctx.restore();
+    // }
 
     private drawCameraName(geom: { renderWidth: number; renderHeight: number; offsetX: number; offsetY: number }) {
         if (!this.cameraName) return;
@@ -253,11 +253,11 @@ class MjpegPlayer {
         console.log("MjpegPlayer destroyed.");
     }
 
-    set showDetections(value: boolean) {
-        this._showDetections = value;
-        // Draw immediately to reflect change
-        this.render(true);
-    }
+    // set showDetections(value: boolean) {
+    //     this._showDetections = value;
+    //     // Draw immediately to reflect change
+    //     this.render(true);
+    // }
 
     public setCameraName(name: string) {
         this.cameraName = name;
@@ -272,11 +272,11 @@ export default function CanvasVideo(props: { id: string, showDetections: Accesso
 
     let player: MjpegPlayer | null = null;
 
-    createEffect(() => {
-        const sd = props.showDetections();
-        if (!player) return;
-        player.showDetections = sd;
-    });
+    // createEffect(() => {
+    //     const sd = props.showDetections();
+    //     if (!player) return;
+    //     player.showDetections = sd;
+    // });
 
     createEffect(() => {
         const name = props.name?.();
@@ -308,9 +308,9 @@ export default function CanvasVideo(props: { id: string, showDetections: Accesso
         const message = newMessage();
         if (!message) return;
         const isCorrectStreamMessage = (message.type == 'frame' || message.type == 'codec') && message.id === props.id && message.session_id === ses_id;
-        const isCorrectEngineMessage = message.type == 'object_detection' && message.media_id === props.id && message.session_id === ses_id;
+        // const isCorrectEngineMessage = message.type == 'object_detection' && message.media_id === props.id && message.session_id === ses_id;
 
-        if (isCorrectStreamMessage || isCorrectEngineMessage) {
+        if (isCorrectStreamMessage /* || isCorrectEngineMessage */) {
             player?.handleMessage(message);
         }
     });

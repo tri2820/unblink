@@ -23,7 +23,6 @@ export interface MediaUnit {
     embedding?: Uint8Array | null; // Stored as BLOB
     path: string;
     type: string;
-    created_by_agent_id?: string | null;
 }
 
 export interface Secret {

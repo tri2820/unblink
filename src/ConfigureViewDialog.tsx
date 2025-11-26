@@ -1,21 +1,22 @@
 import { Dialog } from "@ark-ui/solid";
-import { createEffect, createSignal } from "solid-js";
+import { createEffect, createSignal, type Accessor } from "solid-js";
 import { ArkDialog } from "./ark/ArkDialog";
 import ArkSwitch from "./ark/ArkSwitch";
 import { FiSettings } from "solid-icons/fi";
 
 interface ConfigureViewDialogProps {
-    showDetections: boolean;
+    showDetections: Accessor<boolean>;
     onSave: (settings: { showDetections: boolean }) => void;
     disabled?: boolean;
 }
 
 export default function ConfigureViewDialog(props: ConfigureViewDialogProps) {
-    const [localShowDetections, setLocalShowDetections] = createSignal(props.showDetections);
+    const [localShowDetections, setLocalShowDetections] = createSignal<boolean>(props.showDetections());
 
     // Sync local state when prop changes (e.g. when dialog opens/re-renders if parent changes)
     createEffect(() => {
-        setLocalShowDetections(props.showDetections);
+        const sd = props.showDetections();
+        setLocalShowDetections(sd);
     });
 
     const handleSave = (setOpen: (open: boolean) => void) => {

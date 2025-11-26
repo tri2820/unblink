@@ -1,38 +1,11 @@
 import { createSignal, For, onMount, Show } from 'solid-js';
-import { FiTrash, FiEye } from "solid-icons/fi";
-import { toaster } from "../ark/ArkToast";
+import { FiEye } from "solid-icons/fi";
 import { authorized_as_admin, agents, agentsLoading, fetchAgents, setAgents } from "../shared";
 import LayoutContent from "./LayoutContent";
+import DeleteAgentButton from "../DeleteAgentButton";
 
 export default function AgentsContent() {
     onMount(fetchAgents);
-
-    const handleDeleteAgent = async (agentId: string, agentName: string) => {
-        toaster.promise(async () => {
-            const response = await fetch(`/agents/${agentId}`, {
-                method: 'DELETE',
-            });
-
-            if (response.ok) {
-                setAgents(prev => prev.filter(agent => agent.id !== agentId));
-            } else {
-                throw new Error('Failed to delete agent');
-            }
-        }, {
-            loading: {
-                title: 'Deleting...',
-                description: `Deleting agent "${agentName}".`,
-            },
-            success: {
-                title: 'Success!',
-                description: `Agent "${agentName}" has been deleted.`,
-            },
-            error: {
-                title: 'Failed',
-                description: 'There was an error deleting the agent. Please try again.',
-            },
-        });
-    };
 
     return <LayoutContent title="Agents">
         <Show when={!agentsLoading()} fallback={
@@ -78,13 +51,9 @@ export default function AgentsContent() {
                                         </td>
                                         <Show when={authorized_as_admin()}>
                                             <td class="px-6 py-4">
-                                                <button
-                                                    onClick={() => handleDeleteAgent(agent.id, agent.name)}
-                                                    class="text-neu-500 hover:text-red-400 transition-colors p-1"
-                                                    title="Delete agent"
-                                                >
-                                                    <FiTrash class="w-4 h-4" />
-                                                </button>
+                                                <DeleteAgentButton agent={agent}>
+                                                    Delete
+                                                </DeleteAgentButton>
                                             </td>
                                         </Show>
                                     </tr>

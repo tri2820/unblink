@@ -1,8 +1,8 @@
 import { createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
-import type { ClientToServerMessage, FrameStatsMessage, ServerToClientMessage, Subscription, User } from "~/shared";
+import type { ClientToServerMessage, FrameStatsMessage, ServerToClientMessage, Subscription, ClientUser } from "~/shared";
 import type { Conn } from "~/shared/Conn";
-import type { MediaUnit, Agent } from "~/shared/database";
+import type { MediaUnit, Agent } from "~/shared";
 
 export type Camera = {
     id: string;
@@ -30,7 +30,7 @@ export type Tab = {
 }
 
 export const [isAuthenticated, setIsAuthenticated] = createSignal(false);
-export const [user, setUser] = createSignal<User>();
+export const [user, setUser] = createSignal<ClientUser>();
 export const authorized_as_admin = () => {
     if (settings()['auth_enabled'] !== 'true') return true; // if auth screen is disabled, all users are admins  
     const u = user();

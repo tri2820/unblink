@@ -1,6 +1,6 @@
-
-import type { MediaUnit } from "./database";
-import type { DetectionObject, EngineToServer, WorkerRequest, WorkerResponse } from "./engine";
+import type { MediaUnit, User } from "./database";
+import type { RemoteJob, WorkerOutput__Segmentation, WorkerRequest } from "./engine";
+export * from "./database";
 
 // Frame stats message - calculated on backend from frame_motion_energy
 export type FrameStatsMessage = {
@@ -12,6 +12,8 @@ export type FrameStatsMessage = {
     sma100: number;
     timestamp: number; // Unix timestamp in milliseconds
 }
+
+export type DetectionObject = WorkerOutput__Segmentation[][0];
 
 
 export type StreamMessage = {
@@ -111,20 +113,7 @@ export type ServerToWorkerStreamMessage =
 
 
 
-export type User = Pick<DbUser, 'id' | 'username' | 'role'>;
-export type DbUser = {
-    id: string;
-    username: string;
-    role: string;
-    password_hash: string;
-};
-
-export type DbSession = {
-    session_id: string;
-    user_id: string;
-    created_at: Date;
-    expires_at: Date;
-};
+export type ClientUser = Pick<User, 'id' | 'username' | 'role'>;
 
 export type RESTQuery = {
     table: string;
@@ -161,9 +150,12 @@ export type ServerEphemeralState = {
     moment_frames: Map<string, { id: string, at_time: number, data: Uint8Array }[]>;
     current_moment_ids: Map<string, string>; // media_id -> moment_id for active moments
 };
-export type InMemWorkerRequest = Omit<WorkerRequest, 'jobs'> & {
-    jobs: (Omit<WorkerRequest['jobs'][number], 'job_id'> & {
-        cont: (output: any) => void;
-    })[];
+
+export type InMemJob = Omit<RemoteJob, 'job_id'> & {
+    cont: (output: any) => void;
 };
+export type InMemWorkerRequest = Omit<WorkerRequest, 'jobs'> & {
+    jobs: InMemJob[];
+};
+
 

@@ -1,9 +1,9 @@
-import { createSignal, onMount, For, type Accessor, type Setter } from "solid-js";
-import type { UseSubTab } from "../SettingsContent";
+import { createSignal, For, onMount } from "solid-js";
+import type { ClientUser } from "~/shared";
 import ArkSwitch from "~/src/ark/ArkSwitch";
-import type { User } from "~/shared";
+import type { UseSubTab } from "../SettingsContent";
 
-async function getUsers(): Promise<User[]> {
+async function getUsers(): Promise<ClientUser[]> {
     try {
         const response = await fetch('/users');
         if (!response.ok) {
@@ -18,7 +18,7 @@ async function getUsers(): Promise<User[]> {
 }
 
 export const useAuthSubTab: UseSubTab = (props) => {
-    const [users, setUsers] = createSignal<User[]>([]);
+    const [users, setUsers] = createSignal<ClientUser[]>([]);
 
     onMount(async () => {
         const fetchedUsers = await getUsers();

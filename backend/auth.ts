@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
-import type { DbSession, DbUser } from "~/shared";
 import { getSessionById, getUserById as getUserByIdDB } from "./database/utils";
+import type { Session, User } from "~/shared";
 
 export function generateSecret(length = 64) {
 
@@ -32,8 +32,8 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 
 export async function auth_required(settings: () => Record<string, string>, req: Request): Promise<{
     data: {
-        user?: DbUser,
-        session?: DbSession
+        user?: User,
+        session?: Session
     },
     error?: undefined
 } | {
@@ -65,14 +65,6 @@ export async function auth_required(settings: () => Record<string, string>, req:
     const session = await getSessionById(session_id);
     if (!session) return { error: { code: 401, msg: "Invalid or expired session" } };
 
-    // Convert Session numbers to DbSession Dates
-    const dbSession: DbSession = {
-        session_id: session.session_id,
-        user_id: session.user_id,
-        created_at: new Date(session.created_at),
-        expires_at: new Date(session.expires_at)
-    };
-
     if (!session || new Date(session.expires_at) < new Date())
         return {
             error: {
@@ -93,7 +85,7 @@ export async function auth_required(settings: () => Record<string, string>, req:
     return {
         data: {
             user,
-            session: dbSession
+            session
         }
     };
 

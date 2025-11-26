@@ -1,5 +1,5 @@
 import path from "path";
-import type { FrameStatsMessage, ObjectDetectionMessage, ServerEphemeralState, ServerToClientMessage } from "~/shared";
+import type { FrameStatsMessage, InMemJob, InMemWorkerRequest, ObjectDetectionMessage, ServerEphemeralState, ServerToClientMessage } from "~/shared";
 import { FRAMES_DIR } from "./appdir";
 import { createMediaUnit, getMediaUnitById, updateMediaUnit } from "./database/utils";
 import type { ForwardingOpts } from "./forward";
@@ -8,19 +8,24 @@ import type { WebhookMessage } from "~/shared/alert";
 import { calculateFrameStats, type MomentData } from "./utils/frame_stats";
 import { set_moment_state } from "./worker_connect/worker_stream_connector";
 import { handleMoment } from "./utils/handle_moment";
+import type { WorkerInput__Embedding, WorkerInput__MotionEnergy, WorkerInput__Vlm, WorkerOutput__Embedding, WorkerOutput__MotionEnergy, WorkerOutput__Vlm, WorkerType } from "~/shared/engine";
+import { impossible } from "./utils/assert";
 
 export type Builder = {
-    worker_types: string[],
+    worker_types: WorkerType[],
     interval: number,
     should_run: (props: { in_moment: boolean, last_time_run: number }) => boolean,
     write?: (media_id: string, media_unit_id: string, data: Uint8Array) => Promise<void>,
-    mk_cont: (props: { worker_type: string, media_id: string, media_unit_id: string }) => (output: any) => Promise<void>,
+    build: (props: {
+        worker_type: WorkerType,
+        media_id: string,
+        media_unit_id: string,
+    }) => Promise<InMemJob>,
 
 };
 
 export const create_builders: (
     opts: ForwardingOpts,
-
 ) => { [builder_id: string]: Builder } = (opts) => {
     return {
         'indexing': {
@@ -50,124 +55,161 @@ export const create_builders: (
                 };
                 await createMediaUnit(mu)
             },
-            mk_cont({ worker_type, media_id, media_unit_id }) {
-                return async (output: any) => {
-                    if (
-                        worker_type == 'vlm'
-                    ) {
-                        let description = output.response;
+  
+            async build({ worker_type, media_id, media_unit_id }) {
+                if (worker_type == 'vlm') {
+                    return {
+                        worker_type,
+                        input: {
+                            messages: [
+                                { role: 'user', content: [{ type: 'text', text: 'Provide a concise description of the content of this image in a few words.' }] },
+                                { role: 'assistant', content: [{ type: 'image', image: { __type: 'resource-ref', id: media_unit_id } }] },
+                            ]
+                        } as WorkerInput__Vlm,
+                        async cont(output: WorkerOutput__Vlm) {
+                                let description = output.response;
 
-                        // Try to remove common prefixes
-                        // E.g., "This image depicts ...", "This image captures ...", "In this image, ", "The image shows ...", "The image captures ..."
-                        const prefixes = [
-                            "This is an image of a ",
-                            "The image is ",
-                            "The image depicts ",
-                            "The image captures ",
-                            "This image depicts ",
-                            "This image captures ",
-                            "In this image, ",
-                            "The image shows ",
-                            "The image captures ",
-                            "This photo depicts ",
-                            "This photo captures ",
-                            "In this photo, ",
-                            "The photo shows ",
-                            "The photo captures ",
-                        ];
-                        for (const prefix of prefixes) {
-                            if (description.startsWith(prefix)) {
-                                description = description.slice(prefix.length);
-                                // Properly capitalize first letter
-                                description = description.charAt(0).toUpperCase() + description.slice(1);
-                                break;
+                            // Try to remove common prefixes
+                            // E.g., "This image depicts ...", "This image captures ...", "In this image, ", "The image shows ...", "The image captures ..."
+                            const prefixes = [
+                                "This is an image of a ",
+                                "The image is ",
+                                "The image depicts ",
+                                "The image captures ",
+                                "This image depicts ",
+                                "This image captures ",
+                                "In this image, ",
+                                "The image shows ",
+                                "The image captures ",
+                                "This photo depicts ",
+                                "This photo captures ",
+                                "In this photo, ",
+                                "The photo shows ",
+                                "The photo captures ",
+                            ];
+                            for (const prefix of prefixes) {
+                                if (description.startsWith(prefix)) {
+                                    description = description.slice(prefix.length);
+                                    // Properly capitalize first letter
+                                    description = description.charAt(0).toUpperCase() + description.slice(1);
+                                    break;
+                                }
                             }
-                        }
 
-                        const mu = await getMediaUnitById(media_unit_id);
-                        if (!mu) {
-                            logger.error(`MediaUnit not found for media_unit_id ${media_unit_id}`);
-                            return;
-                        }
+                            const mu = await getMediaUnitById(media_unit_id);
+                            if (!mu) {
+                                logger.error(`MediaUnit not found for media_unit_id ${media_unit_id}`);
+                                return;
+                            }
 
-                        const msg: ServerToClientMessage = {
-                            type: 'agent_card',
-                            media_unit: {
-                                ...mu,
+                            const msg: ServerToClientMessage = {
+                                type: 'agent_card',
+                                media_unit: {
+                                    ...mu,
+                                    description,
+                                }
+                            }
+
+                            // Forward to clients 
+                            for (const [id, client] of opts.clients.entries()) {
+                                client.send(msg);
+                            }
+
+                            // Also forward to webhook
+                            opts.forward_to_webhook({
+                                event: 'description',
+                                created_at: new Date().toISOString(),
+                                media_unit_id: mu.id,
+                                media_id: mu.media_id,
                                 description,
-                            }
-                        }
+                            });
 
-                        // Forward to clients 
-                        for (const [id, client] of opts.clients.entries()) {
-                            client.send(msg);
-                        }
-
-                        // Also forward to webhook
-                        opts.forward_to_webhook({
-                            event: 'description',
-                            created_at: new Date().toISOString(),
-                            media_unit_id: mu.id,
-                            media_id: mu.media_id,
-                            description,
-                        });
-
-                        // Update media unit in database
-                        updateMediaUnit(media_unit_id, {
-                            description,
-                        })
-                    }
-
-                    if (
-                        worker_type == 'embedding'
-                    ) {
-                        // Convert number[] to Uint8Array for database storage
-                        const embeddingBuffer = output.embedding ? new Uint8Array(new Float32Array(output.embedding).buffer) : null;
-
-                        // Store in database
-                        updateMediaUnit(media_unit_id, {
-                            embedding: embeddingBuffer,
-                        })
-                    }
+                            // Update media unit in database
+                            updateMediaUnit(media_unit_id, {
+                                description,
+                            })
+                        },
+                    };
                 }
-            },
-        },
-        'object_detection': {
-            worker_types: ['object_detection'],
-            interval: 1000,
-            should_run({ in_moment }) {
-                return true
-            },
-            mk_cont({ media_id, media_unit_id }) {
-                return async (output: any) => {
-                    const msg: ObjectDetectionMessage = {
-                        type: 'object_detection',
-                        media_id,
-                        media_unit_id,
-                        detections: output.detections,
-                    }
-                    opts.forward_to_webhook({
-                        ...msg,
-                        created_at: new Date().toISOString(),
-                    });
+                
+                if (worker_type == 'embedding') {
+                    return {
+                        worker_type,
+                        input: {
+                            filepath: {
+                                __type: 'resource-ref',
+                                id: media_unit_id,
+                            } 
+                        } as WorkerInput__Embedding,
+                        async cont(output: WorkerOutput__Embedding) {
+                             // Convert number[] to Uint8Array for database storage
+                            const embeddingBuffer = output.embedding ? new Uint8Array(new Float32Array(output.embedding).buffer) : null;
 
-                    // Forward to clients
-                    for (const [, client] of opts.clients.entries()) {
-                        client.send(msg);
-                    }
+                            // Store in database
+                            updateMediaUnit(media_unit_id, {
+                                embedding: embeddingBuffer,
+                            })
+                        },
+                    };
                 }
-            },
+
+                impossible(worker_type as never);
+            }
         },
+//         'object_detection': {
+//             worker_types: ['object_detection'],
+//             interval: 1000,
+//             should_run({ in_moment }) {
+//                 return true
+//             },
+         
+//             build({ worker_type, media_id, media_unit_id }) {
+//                 return {
+//                     worker_type,
+//                     input: {
+//                         image: {
+//                             __type: 'resource-ref',
+//                             id: media_unit_id,
+//                         }
+//                     },
+//                     async cont(output: any) {
+// const msg: ObjectDetectionMessage = {
+//                         type: 'object_detection',
+//                         media_id,
+//                         media_unit_id,
+//                         detections: output.detections,
+//                     }
+//                     opts.forward_to_webhook({
+//                         ...msg,
+//                         created_at: new Date().toISOString(),
+//                     });
+
+//                     // Forward to clients
+//                     for (const [, client] of opts.clients.entries()) {
+//                         client.send(msg);
+//                     }
+//                     }
+//                 };
+//             }
+//         },
         'motion_energy': {
             worker_types: ['motion_energy'],
             interval: 1000,
             should_run() {
                 return true
             },
-            mk_cont({ media_id, media_unit_id }) {
-                return async (output: any) => {
-
-                    const state = opts.state();
+            async build({ worker_type, media_id, media_unit_id }) {
+                return {
+                    worker_type,
+                    input: {
+                        current_frame: {
+                            __type: 'resource-ref',
+                            id: media_unit_id,
+                        },
+                        media_id,
+                    } as WorkerInput__MotionEnergy,
+                    async cont(output: WorkerOutput__MotionEnergy) {
+                         const state = opts.state();
 
                     // Moment detection handler
                     const onMoment = (moment: MomentData) => {
@@ -175,6 +217,11 @@ export const create_builders: (
                         const momentId = state.current_moment_ids.get(media_id) || null;
                         handleMoment(moment, state, momentId, opts.send_to_engine);
                     };
+
+                    if (output.motion_energy === undefined) {
+                        logger.warn(`No motion_energy in output for media_id ${media_id}, media_unit_id ${media_unit_id}`);
+                        return;
+                    }
 
                     // Calculate frame stats with moment detection
                     const frameStats = calculateFrameStats(
@@ -238,8 +285,9 @@ export const create_builders: (
                     state.frame_stats_messages.push(statsMessage);
                     state.frame_stats_messages = state.frame_stats_messages.slice(-1000);
 
+                    }
                 }
-            },
+            }
         }
     }
 }

@@ -1,7 +1,7 @@
 import { formatDistance } from "date-fns";
 import { FaSolidChevronLeft, FaSolidChevronRight } from "solid-icons/fa";
 import { For, Show, createSignal } from "solid-js";
-import type { MediaUnit } from "~/shared/database";
+import type { MediaUnit } from "~/shared";
 import LoadingSkeleton from "./search/LoadingSkeleton";
 import { cameras, relevantAgentCards } from "./shared";
 

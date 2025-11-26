@@ -1,12 +1,13 @@
 import type { ServerWebSocket } from "bun";
 import { decode } from "cbor-x";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { v4 as uuid } from 'uuid';
 import { admin } from "./admin";
 import { WsClient } from "./backend/WsClient";
 import { FRAMES_DIR, RUNTIME_DIR } from "./backend/appdir";
 import { auth_required, verifyPassword } from "./backend/auth";
-import { createMedia, createSession, deleteMedia, deleteSession, getAllMedia, getAllMoments, getAllSettings as getAllSettingsDB, getAllUsers, getByQuery, getMediaUnitsByEmbedding, getMomentById, getUserByUsername as getUserByUsernameDB, setSetting as setSettingDB, updateMedia, getAllAgents, deleteAgent, createAgent } from "./backend/database/utils";
+import { createAgent, createMedia, createSession, deleteAgent, deleteMedia, deleteSession, getAllAgents, getAllMedia, getAllMoments, getAllSettings as getAllSettingsDB, getAllUsers, getByQuery, getMediaUnitsByEmbedding, getMomentById, getUserByUsername as getUserByUsernameDB, setSetting as setSettingDB, updateMedia } from "./backend/database/utils";
 import { createForwardFunction } from "./backend/forward";
 import { logger } from "./backend/logger";
 import { check_version } from "./backend/startup/check_version";
@@ -17,9 +18,8 @@ import { create_webhook_forward } from "./backend/webhook";
 import { spawn_worker } from "./backend/worker_connect/shared";
 import { start_stream, start_streams } from "./backend/worker_connect/worker_stream_connector";
 import homepage from "./index.html";
-import type { ClientToServerMessage, DbUser, InMemWorkerRequest, RESTQuery, ServerEphemeralState } from "./shared";
-import { randomUUID } from "node:crypto";
-import type { WorkerRequest } from "./shared/engine";
+import type { ClientToServerMessage, InMemWorkerRequest, RESTQuery, ServerEphemeralState } from "./shared";
+import type { RemoteJob, WorkerRequest } from "./shared/engine";
 
 // ... (rest of imports)
 
@@ -66,10 +66,9 @@ const handleMessage = createForwardFunction({
 
         for (const job of req.jobs) {
             const _cont = job.cont;
-            const serializable_job = {
-                cross_job_id: job.cross_job_id,
+            const serializable_job : RemoteJob = {
+                input: job.input,
                 worker_type: job.worker_type,
-                resources: job.resources,
                 job_id: randomUUID()
             }
 
@@ -115,7 +114,7 @@ const server = Bun.serve({
                     return new Response("Missing username or password", { status: 400 });
                 }
 
-                const user: DbUser | undefined = await getUserByUsernameDB(username);
+                const user = await getUserByUsernameDB(username);
 
                 if (!user) return new Response("Invalid username or password", { status: 401 });
 

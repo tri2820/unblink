@@ -1,6 +1,5 @@
 import { For, Show, createEffect, createSignal, onCleanup } from "solid-js";
-import type { RESTQuery } from "~/shared";
-import type { MediaUnit } from "~/shared/database";
+import type { RESTQuery, MediaUnit } from "~/shared";
 import ActivityBar from "./ActivityBar";
 import CanvasVideo from "./CanvasVideo";
 import ConfigureViewDialog from "./ConfigureViewDialog";
@@ -69,7 +68,7 @@ export default function ViewContent() {
                     }, {
                         'field': 'description', 'op': 'is_not', 'value': null
                     }],
-                    select: ['id', 'media_id', 'at_time', 'description', 'path', 'type', 'created_by_agent_id'],
+                    select: ['id', 'media_id', 'at_time', 'description', 'path', 'type'],
                     limit: 20,
                     order_by: { field: 'at_time', direction: 'DESC' }
                 } as RESTQuery,
@@ -119,7 +118,7 @@ export default function ViewContent() {
                                 <div>
                                     <ConfigureViewDialog
                                         disabled={settings()['object_detection_enabled'] !== 'true'}
-                                        showDetections={showDetections()}
+                                        showDetections={showDetections}
                                         onSave={(s) => setShowDetections(s.showDetections)}
                                     />
                                 </div>

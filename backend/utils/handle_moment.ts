@@ -1,11 +1,11 @@
 import { randomUUID } from "crypto";
 import path from "path";
-import type { InMemWorkerRequest, ServerEphemeralState } from "~/shared";
+import type { InMemJob, InMemWorkerRequest, ServerEphemeralState } from "~/shared";
 import { FRAMES_DIR } from "../appdir";
 import { createMoment, updateMoment } from "../database/utils";
 import { logger } from "../logger";
 import type { MomentData } from "./frame_stats";
-import type { Resource } from "~/shared/engine";
+import type { Resource, WorkerInput__Vlm } from "~/shared/engine";
 import { parseJsonFromString } from "./dirty_json";
 
 type FrameData = {
@@ -32,21 +32,7 @@ async function summarizeMoment(
         type: 'image'
     }));
 
-    const system_prompt_resource: Resource = {
-        id: crypto.randomUUID(),
-        type: 'text',
-        content: `You are an AI assistant that analyzes multiple images and provides unified titles and descriptions.`,
-        kind: 'system_prompt',
-    };
-
-    const user_text_resource: Resource = {
-        id: crypto.randomUUID(),
-        type: 'text',
-        content: `Analyze these images and provide a single title and description that encompasses both of them. Your response must be valid JSON containing only the keys 'title' and 'description', with no additional keys, markdown, or extra text. Format: {\"title\": \"string\", \"description\": \"string\"}`,
-        kind: 'user_text',
-    };
-
-    const resources = [system_prompt_resource, user_text_resource, ...image_resources];
+    const resources = image_resources;
 
     logger.info({ momentId, retryCount }, `Starting moment summarization (attempt ${retryCount + 1}/${maxRetries + 1})`);
 
@@ -56,15 +42,24 @@ async function summarizeMoment(
         jobs: [
             {
                 worker_type: 'vlm',
-                resources: resources.map(r => ({ id: r.id })),
-                cont(output) {
+                // resources: resources.map(r => ({ id: r.id })),
+                input: {
+                    messages: [
+                        { role: 'system', content: [{ type: 'text', text: 'You are an AI assistant that analyzes multiple images and provides unified titles and descriptions.' }] },
+                        { role: 'user', content: [
+                            { type: 'text', text: 'Analyze these images and provide a single title and description that encompasses both of them. Your response must be valid JSON containing only the keys \'title\' and \'description\', with no additional keys, markdown, or extra text. Format: {"title": "string", "description": "string"}' },
+                            ...image_resources.map(r => ({ type: 'image' as const, image: { __type: 'resource-ref' as const, id: r.id } }))
+                        ] }
+                    ]
+                } as WorkerInput__Vlm,
+                async cont(output) {
                     logger.info({ momentId, output }, 'Received summarization response');
                     const parsed = parseJsonFromString(output.response);
                     if (parsed.error) {
                         logger.error({ error: parsed.error, response: output.response, retryCount }, "Failed to parse summarization response");
                         if (retryCount < maxRetries) {
                             logger.info({ momentId, retryCount: retryCount + 1 }, "Retrying summarization");
-                            summarizeMoment(frames, momentId, send_to_engine, retryCount + 1, maxRetries);
+                            await summarizeMoment(frames, momentId, send_to_engine, retryCount + 1, maxRetries);
                         } else {
                             logger.error({ momentId }, "Max retries reached for summarization");
                         }
@@ -85,13 +80,13 @@ async function summarizeMoment(
                         logger.error({ response: output.response, retryCount }, "Summarization response missing valid title or description");
                         if (retryCount < maxRetries) {
                             logger.info({ momentId, retryCount: retryCount + 1 }, "Retrying summarization due to invalid response");
-                            summarizeMoment(frames, momentId, send_to_engine, retryCount + 1, maxRetries);
+                            await summarizeMoment(frames, momentId, send_to_engine, retryCount + 1, maxRetries);
                         } else {
                             logger.error({ momentId }, "Max retries reached for summarization due to invalid response");
                         }
                     }
                 }
-            }
+            }  as InMemJob
         ],
     };
 
@@ -146,7 +141,7 @@ export async function handleMoment(
         // Trigger summarization
         // momentFrames is already defined above
         if (momentFrames.length > 0) {
-            summarizeMoment(momentFrames, finalMomentId, send_to_engine);
+            await summarizeMoment(momentFrames, finalMomentId, send_to_engine);
 
             // Clear frames for this media
             state.moment_frames.delete(moment.media_id);
