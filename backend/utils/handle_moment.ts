@@ -1,12 +1,13 @@
 import { randomUUID } from "crypto";
 import path from "path";
-import type { InMemJob, InMemWorkerRequest, ServerEphemeralState } from "~/shared";
+import { createRequestBuilder } from "~/index";
+import type { ServerEphemeralState } from "~/shared";
+import type { Resource, WorkerInput__Llm, WorkerInput__Vlm, WorkerOutput__Llm, WorkerOutput__Vlm } from "~/shared/engine";
 import { FRAMES_DIR } from "../appdir";
 import { createMoment, updateMoment } from "../database/utils";
 import { logger } from "../logger";
-import type { MomentData } from "./frame_stats";
-import type { Resource, WorkerInput__Vlm } from "~/shared/engine";
 import { parseJsonFromString } from "./dirty_json";
+import type { MomentData } from "./frame_stats";
 
 type FrameData = {
     id: string;
@@ -16,10 +17,7 @@ type FrameData = {
 
 async function summarizeMoment(
     frames: FrameData[],
-    momentId: string,
-    send_to_engine: (msg: InMemWorkerRequest) => void,
-    retryCount: number = 0,
-    maxRetries: number = 3
+    momentId: string
 ) {
     if (frames.length === 0) {
         logger.warn(`No frames provided for moment ${momentId}, skipping summarization`);
@@ -32,88 +30,91 @@ async function summarizeMoment(
         type: 'image'
     }));
 
-    const resources = image_resources;
+    logger.info({ momentId }, `Starting moment summarization`);
 
-    logger.info({ momentId, retryCount }, `Starting moment summarization (attempt ${retryCount + 1}/${maxRetries + 1})`);
-
-    const msg: InMemWorkerRequest = {
-        type: 'worker_request',
-        resources,
-        jobs: [
+    const reqBuilder = createRequestBuilder();
+    reqBuilder.add_resources(image_resources);
+    const vlm_output_promise = reqBuilder.add_job<WorkerInput__Vlm, WorkerOutput__Vlm>('vlm', {
+        messages: [
             {
-                worker_type: 'vlm',
-                // resources: resources.map(r => ({ id: r.id })),
-                input: {
-                messages: [
-                    { 
-                        role: 'system', 
-                        content: [{ 
-                            type: 'text', 
-                            text: 'You are a helpful assistant that outputs only valid JSON. You help formatting video content.' 
-                        }] 
+                role: 'system',
+                content: [{
+                    type: 'text',
+                    text: 'You are a security camera analyst. Describe what you observe in these video frames naturally and in detail.'
+                }]
+            },
+            {
+                role: 'user',
+                content: [
+                    {
+                        type: 'text',
+                        text: 'These are consecutive frames from a security camera. Describe what is happening. Focus on any abnormal behavior, unusual activities, or significant changes. Pay attention to people, objects, movements, and any concerning patterns. Answer naturally and in detail.'
                     },
-                    { 
-                        role: 'user', 
-                        content: [
-                            { 
-                                type: 'text', 
-                                text: 'These are frames of a video. What is happening? Who are doing what? Output JSON:\n{"title": "who doing what", "description": "concise description"}\nOnly output valid JSON, nothing else.' 
-                            },
-                            ...image_resources.map(r => ({ 
-                                type: 'image' as const, 
-                                image: { __type: 'resource-ref' as const, id: r.id } 
-                            }))
-                        ] 
-                    }
+                    ...image_resources.map(r => ({
+                        type: 'image' as const,
+                        image: { __type: 'resource-ref' as const, id: r.id }
+                    }))
                 ]
-            } as WorkerInput__Vlm,
-                async cont(output) {
-                    logger.info({ momentId, output }, 'Received summarization response');
-                    const parsed = parseJsonFromString(output.response);
-                    if (parsed.error) {
-                        logger.error({ error: parsed.error, response: output.response, retryCount }, "Failed to parse summarization response");
-                        if (retryCount < maxRetries) {
-                            logger.info({ momentId, retryCount: retryCount + 1 }, "Retrying summarization");
-                            await summarizeMoment(frames, momentId, send_to_engine, retryCount + 1, maxRetries);
-                        } else {
-                            logger.error({ momentId }, "Max retries reached for summarization");
-                        }
-                        return;
-                    }
+            }
+        ]
+    })
 
-                    logger.info({ parsed }, 'Parsed summarization response');
 
-                    const title = parsed.data.title;
-                    const description = parsed.data.description;
-                    if (typeof title === 'string' && typeof description === 'string') {
-                        updateMoment(momentId, {
-                            title,
-                            description,
-                        });
-                        logger.info({ momentId }, "Successfully updated moment with summarization");
-                    } else {
-                        logger.error({ response: output.response, retryCount }, "Summarization response missing valid title or description");
-                        if (retryCount < maxRetries) {
-                            logger.info({ momentId, retryCount: retryCount + 1 }, "Retrying summarization due to invalid response");
-                            await summarizeMoment(frames, momentId, send_to_engine, retryCount + 1, maxRetries);
-                        } else {
-                            logger.error({ momentId }, "Max retries reached for summarization due to invalid response");
-                        }
-                    }
-                }
-            }  as InMemJob
-        ],
-    };
+    reqBuilder.send();
+    const vlm_output = await vlm_output_promise;
 
-    send_to_engine(msg);
-    logger.info(`Sent moment summarization request for ${momentId} with ${frames.length} frames`);
+    const llm_reqBuilder = createRequestBuilder();
+
+    const llm_output_promise = llm_reqBuilder.add_job<WorkerInput__Llm, WorkerOutput__Llm>('llm_fast', {
+        messages: [
+            {
+                role: 'system',
+                content: 'You are a JSON formatter. Convert security camera observations into structured JSON format. Focus on abnormal behavior and create clear, actionable titles.'
+            },
+            {
+                role: 'user',
+                content: `Based on this security camera observation, create a JSON response with two fields:
+1. "title": A clear, concise title with SUBJECT and ACTION (e.g., "Person loitering near entrance", "Vehicle blocking driveway", "Package left unattended"). Focus on abnormal or notable behavior.
+2. "description": A detailed description of what was observed, including context and any concerns.
+
+Observation:
+${vlm_output.response}
+
+Respond with ONLY valid JSON in this format:
+{
+  "title": "Subject performing action",
+  "description": "Detailed description here"
+}`
+            }
+        ]
+    });
+
+    llm_reqBuilder.send();
+    const llm_output = await llm_output_promise;
+    const llmResponse = llm_output.response;
+
+    // Parse and validate the formatted response
+    const parsed = parseJsonFromString(llmResponse);
+
+    logger.info({ parsed }, 'Parsed LLM response');
+
+    const title = parsed.data.title;
+    const description = parsed.data.description;
+    if (typeof title === 'string' && typeof description === 'string') {
+        updateMoment(momentId, {
+            title,
+            description,
+        });
+        logger.info({ momentId, title }, "Successfully updated moment with summarization");
+    } else {
+        logger.error({ response: llmResponse }, "Formatted response missing valid title or description");
+    }
 }
 
 export async function handleMoment(
     moment: MomentData,
     state: ServerEphemeralState,
     momentId: string | null,
-    send_to_engine: (msg: InMemWorkerRequest) => void
 ) {
     const eventType = moment.type === 'instant' ? '⚡ Instant' : '🎯 Standard';
     logger.info({ moment }, `${eventType} moment detected!`);
@@ -156,8 +157,7 @@ export async function handleMoment(
         // Trigger summarization
         // momentFrames is already defined above
         if (momentFrames.length > 0) {
-            await summarizeMoment(momentFrames, finalMomentId, send_to_engine);
-
+            await summarizeMoment(momentFrames, finalMomentId);
             // Clear frames for this media
             state.moment_frames.delete(moment.media_id);
         } else {

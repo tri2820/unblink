@@ -9,7 +9,7 @@ export type ResourceRef = {
     id: string,
 }
 
-export type WorkerType = 'motion_energy' | 'embedding' | 'llm' | 'vlm' | 'caption' | 'object_detection' | 'segmentation';
+export type WorkerType = string;
 export type RemoteJob = {
     job_id: string,
     worker_type: WorkerType,

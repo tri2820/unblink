@@ -1,12 +1,13 @@
 import type { ServerWebSocket } from "bun";
 import { decode } from "cbor-x";
 import { randomUUID } from "crypto";
-import type { InMemWorkerRequest, WorkerToServerMessage } from "~/shared";
+import type { WorkerToServerMessage } from "~/shared";
 import type { WebhookMessage } from "~/shared/alert";
 import { updateMoment } from "./database/utils";
 import type { WsClient } from "./WsClient";
 
 import type { ServerEphemeralState } from "~/shared";
+import { createRequestBuilder } from "..";
 import { create_builders, updateMomentFrames } from "./forward_utils";
 import { logger } from "./logger";
 
@@ -22,7 +23,6 @@ export type ForwardingOpts = {
     worker_stream: () => Worker,
     clients: Map<ServerWebSocket, WsClient>,
     settings: () => Record<string, string>,
-    send_to_engine: (msg: InMemWorkerRequest) => void,
     forward_to_webhook: (msg: WebhookMessage) => Promise<void>,
     state: () => ServerEphemeralState,
 };
@@ -73,52 +73,48 @@ export const createForwardFunction = (opts: ForwardingOpts) => {
         // logger.info({ decoded_is_ephemeral: decoded.is_ephemeral }, 'Forwarding message');
         if (decoded.type === 'frame' && !decoded.is_ephemeral) {
             const media_unit_id = randomUUID();
-            const req: InMemWorkerRequest = {
-                jobs: [],
-                type: 'worker_request',
-                // Shared image resource for all jobs
-                resources: [{
-                    id: media_unit_id,
-                    type: 'image',
-                    data: decoded.data
-                }],
-            }
-
             const in_moment = opts.state().active_moments.has(decoded.id);
             maybeInitState(decoded.id)
             const now = Date.now();
+
+            const reqBuilder = createRequestBuilder()
+            reqBuilder.add_resource({
+                id: media_unit_id,
+                type: 'image',
+                data: decoded.data
+            })
+
             const builders = create_builders(opts)
             for (const [builder_id, builder] of Object.entries(builders)) {
                 const last_time_run = state.streams[decoded.id]![builder_id] ?? 0;
-                if (!builder.should_run({ in_moment, last_time_run })) continue;
-                if (now - last_time_run < builder.interval) continue;
+                const time_since_last_run = now - last_time_run;
+                
+                if (!builder.should_run({ in_moment, last_time_run })) {
+                    // logger.debug({ builder_id, in_moment, last_time_run }, 'Builder should_run returned false');
+                    continue;
+                }
+                if (time_since_last_run < builder.interval) {
+                    // logger.debug({ 
+                    //     builder_id, 
+                    //     time_since_last_run, 
+                    //     interval: builder.interval,
+                    //     time_remaining: builder.interval - time_since_last_run
+                    // }, 'Builder skipped due to interval throttling');
+                    continue;
+                }
+                
+                logger.debug({ builder_id, time_since_last_run }, 'Running builder');
                 state.streams[decoded.id]![builder_id] = now;
-
-                // if (builder_id == 'indexing') {
-                //     logger.info({ media_id: decoded.id }, 'Indexing ...')
-                // }
                 await builder.write?.(decoded.id, media_unit_id, decoded.data)
                 for (const worker_type of builder.worker_types) {
-
-                    const job = await builder.build({ worker_type, media_id: decoded.id, media_unit_id });
-                    req.jobs.push(job);
-
-                    // const cont = builder.mk_cont({ worker_type, media_id: decoded.id, media_unit_id })
-                    // req.jobs.push({
-                    //     worker_type: worker_type as any,
-                    //     resources: [{
-                    //         id: media_unit_id,
-                    //     }],
-                    //     cont,
-                    //     // Use media_id as cross_job_id to compare motion_energy between frames of this media
-                    //     ...(worker_type == 'motion_energy' ? { cross_job_id: decoded.id } : {})
-                    // });
+                    builder.build({ reqBuilder,  worker_type, media_id: decoded.id, media_unit_id });
                 }
             }
 
-            if (req.jobs.length > 0) {
-                opts.send_to_engine(req)
-            }
+            // if (reqBuilder.req.jobs.length > 0) {
+            //     console.log("Sending request to workers", reqBuilder);
+            // }
+            reqBuilder.send()
 
             // Buffer frames for moment enrichment
             if (in_moment) {

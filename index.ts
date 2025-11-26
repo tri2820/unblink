@@ -2,12 +2,30 @@ import type { ServerWebSocket } from "bun";
 import { decode } from "cbor-x";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { v4 as uuid } from 'uuid';
+import { v4 as uuid } from "uuid";
 import { admin } from "./admin";
 import { WsClient } from "./backend/WsClient";
 import { FRAMES_DIR, RUNTIME_DIR } from "./backend/appdir";
 import { auth_required, verifyPassword } from "./backend/auth";
-import { createAgent, createMedia, createSession, deleteAgent, deleteMedia, deleteSession, getAllAgents, getAllMedia, getAllMoments, getAllSettings as getAllSettingsDB, getAllUsers, getByQuery, getMediaUnitsByEmbedding, getMomentById, getUserByUsername as getUserByUsernameDB, setSetting as setSettingDB, updateMedia } from "./backend/database/utils";
+import {
+    createAgent,
+    createMedia,
+    createSession,
+    deleteAgent,
+    deleteMedia,
+    deleteSession,
+    getAllAgents,
+    getAllMedia,
+    getAllMoments,
+    getAllSettings as getAllSettingsDB,
+    getAllUsers,
+    getByQuery,
+    getMediaUnitsByEmbedding,
+    getMomentById,
+    getUserByUsername as getUserByUsernameDB,
+    setSetting as setSettingDB,
+    updateMedia,
+} from "./backend/database/utils";
 import { createForwardFunction } from "./backend/forward";
 import { logger } from "./backend/logger";
 import { check_version } from "./backend/startup/check_version";
@@ -16,20 +34,25 @@ import { load_secrets } from "./backend/startup/load_secrets";
 import { load_settings } from "./backend/startup/load_settings";
 import { create_webhook_forward } from "./backend/webhook";
 import { spawn_worker } from "./backend/worker_connect/shared";
-import { start_stream, start_streams } from "./backend/worker_connect/worker_stream_connector";
+import {
+    start_stream,
+    start_streams,
+} from "./backend/worker_connect/worker_stream_connector";
 import homepage from "./index.html";
-import type { ClientToServerMessage, InMemWorkerRequest, RESTQuery, ServerEphemeralState } from "./shared";
-import type { RemoteJob, WorkerRequest } from "./shared/engine";
+import type {
+    ClientToServerMessage,
+    RESTQuery,
+    ServerEphemeralState
+} from "./shared";
+import type { RemoteJob, Resource, WorkerRequest } from "./shared/engine";
 
 // ... (rest of imports)
 
-
 // Check args for "admin" mode
 if (process.argv[2] === "admin") {
-    await admin()
+    await admin();
     process.exit(0);
 }
-
 
 logger.info(`Using runtime directory: ${RUNTIME_DIR}`);
 
@@ -42,7 +65,7 @@ const { settings, setSettings } = await load_settings();
 const { secrets } = await load_secrets();
 const forward_to_webhook = create_webhook_forward({ settings });
 
-// For things we don't want to persist in database 
+// For things we don't want to persist in database
 // But want to be readily available upon new client connections
 const state: ServerEphemeralState = {
     remote_worker_jobs_cont: new Map(),
@@ -51,40 +74,80 @@ const state: ServerEphemeralState = {
     active_moments: new Set(),
     moment_frames: new Map(),
     current_moment_ids: new Map(),
-}
+};
+
+export type RequestBuilder = {
+    req: WorkerRequest;
+    add_resource: (res: Resource) => void;
+    add_resources: (res_list: Resource[]) => void;
+    add_job: <I extends Record<string, any>, O>(worker_type: string, input: I) => Promise<O>;
+    send: () => void;
+};
+
+export const createRequestBuilder = (): RequestBuilder => {
+    const req: WorkerRequest = {
+        type: "worker_request",
+        jobs: [],
+        resources: [],
+    };    
+
+    const add_resource = (res: Resource) => {
+        req.resources = req.resources || [];
+        req.resources.push(res);
+    };
+
+    const add_resources = (res_list: Resource[]) => {
+        req.resources = req.resources || [];
+        req.resources.push(...res_list);
+    };
+
+    const add_job = <I extends Record<string, any>, O>(
+        worker_type: string,
+        input: I
+    ): Promise<O> => {
+        let _resolve: ((output: O) => void) | undefined = undefined;
+        const output_promise = new Promise<O>((resolve) => {
+            _resolve = resolve;
+        });
+        const serializable_job: RemoteJob = {
+            job_id: randomUUID(),
+            input,
+            worker_type,
+        };
+
+        // Add to map for later resolution
+        state.remote_worker_jobs_cont.set(serializable_job.job_id, (output) => {
+            _resolve?.(output)
+        });
+
+        req.jobs.push(serializable_job);
+
+        return output_promise;
+    };
+
+    const send = () => {
+        if (req.jobs.length === 0) return; // Nothing to send
+        engine_conn.send(req);
+    };
+
+    return {
+        req,
+        add_resource,
+        add_resources,
+        add_job,
+        send,
+    };
+};
 
 const handleMessage = createForwardFunction({
     clients,
     worker_stream: () => worker_stream,
     settings,
-    send_to_engine: (req: InMemWorkerRequest) => {
-        const serializable_req: WorkerRequest = {
-            jobs: [],
-            type: 'worker_request',
-            resources: req.resources
-        }
-
-        for (const job of req.jobs) {
-            const _cont = job.cont;
-            const serializable_job : RemoteJob = {
-                input: job.input,
-                worker_type: job.worker_type,
-                job_id: randomUUID()
-            }
-
-            serializable_req.jobs.push(serializable_job)
-            state.remote_worker_jobs_cont.set(serializable_job.job_id, (output) => {
-                _cont(output)
-            })
-        }
-
-        engine_conn.send(serializable_req);
-    },
     forward_to_webhook,
     state: () => state,
-})
+});
 
-const worker_stream = await spawn_worker('worker_stream.js', handleMessage);
+const worker_stream = await spawn_worker("worker_stream.js", handleMessage);
 
 const engine_conn = connect_to_engine({
     ENGINE_URL,
@@ -95,7 +158,7 @@ const engine_conn = connect_to_engine({
 });
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
-const HOSTNAME = process.env.HOSTNAME || 'localhost';
+const HOSTNAME = process.env.HOSTNAME || "localhost";
 const SESSION_DURATION_HOURS = 8;
 // Create Bun server
 const server = Bun.serve({
@@ -116,26 +179,36 @@ const server = Bun.serve({
 
                 const user = await getUserByUsernameDB(username);
 
-                if (!user) return new Response("Invalid username or password", { status: 401 });
+                if (!user)
+                    return new Response("Invalid username or password", { status: 401 });
 
                 const is_valid = await verifyPassword(password, user.password_hash);
-                if (!is_valid) return new Response("Invalid username or password", { status: 401 });
+                if (!is_valid)
+                    return new Response("Invalid username or password", { status: 401 });
 
                 const session_id = uuid();
                 const created_at = new Date();
-                const expires_at = new Date(created_at.getTime() + SESSION_DURATION_HOURS * 60 * 60 * 1000);
-
-                await createSession({ session_id, user_id: user.id, created_at: created_at.getTime(), expires_at: expires_at.getTime() });
-
-                const res = Response.json({ message: "Login successful" });
-                const DANGEROUS_DISABLE_SECURE_COOKIE = process.env.DANGEROUS_DISABLE_SECURE_COOKIE === 'true';
-                let cookie = `session_id=${session_id}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_DURATION_HOURS * 3600};${DANGEROUS_DISABLE_SECURE_COOKIE ? '' : ' Secure'}`;
-                res.headers.append(
-                    "Set-Cookie",
-                    cookie
+                const expires_at = new Date(
+                    created_at.getTime() + SESSION_DURATION_HOURS * 60 * 60 * 1000
                 );
 
-                console.log(`User '${username}' logged in, session created with ID: ${session_id}`);
+                await createSession({
+                    session_id,
+                    user_id: user.id,
+                    created_at: created_at.getTime(),
+                    expires_at: expires_at.getTime(),
+                });
+
+                const res = Response.json({ message: "Login successful" });
+                const DANGEROUS_DISABLE_SECURE_COOKIE =
+                    process.env.DANGEROUS_DISABLE_SECURE_COOKIE === "true";
+                let cookie = `session_id=${session_id}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_DURATION_HOURS * 3600
+                    };${DANGEROUS_DISABLE_SECURE_COOKIE ? "" : " Secure"}`;
+                res.headers.append("Set-Cookie", cookie);
+
+                console.log(
+                    `User '${username}' logged in, session created with ID: ${session_id}`
+                );
                 return res;
             },
         },
@@ -145,30 +218,29 @@ const server = Bun.serve({
                 const cookies = req.headers.get("cookie");
                 const session_id = cookies?.match(/session_id=([^;]+)/)?.[1];
 
-                if (!session_id) return new Response("Missing session_id", { status: 400 });
+                if (!session_id)
+                    return new Response("Missing session_id", { status: 400 });
 
                 await deleteSession(session_id);
 
                 const res = new Response("Logged out successfully", { status: 200 });
-                let cookie = "session_id=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0;";
-                const DANGEROUS_DISABLE_SECURE_COOKIE = process.env.DANGEROUS_DISABLE_SECURE_COOKIE === 'true';
-                cookie += DANGEROUS_DISABLE_SECURE_COOKIE ? '' : ' Secure';
-                res.headers.append(
-                    "Set-Cookie",
-                    cookie
-                );
+                let cookie =
+                    "session_id=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0;";
+                const DANGEROUS_DISABLE_SECURE_COOKIE =
+                    process.env.DANGEROUS_DISABLE_SECURE_COOKIE === "true";
+                cookie += DANGEROUS_DISABLE_SECURE_COOKIE ? "" : " Secure";
+                res.headers.append("Set-Cookie", cookie);
                 return res;
             },
         },
 
         "/auth/me": {
             GET: async (req: Request) => {
-                const auth_res = await auth_required(
-                    settings,
-                    req
-                );
+                const auth_res = await auth_required(settings, req);
                 if (auth_res.error) {
-                    return new Response(auth_res.error.msg, { status: auth_res.error.code || 401 });
+                    return new Response(auth_res.error.msg, {
+                        status: auth_res.error.code || 401,
+                    });
                 }
 
                 const { user } = auth_res.data;
@@ -184,25 +256,31 @@ const server = Bun.serve({
             },
         },
 
-        '/media/:id': {
-            PUT: async ({ params, body }: { params: { id: string }, body: any }) => {
+        "/media/:id": {
+            PUT: async ({ params, body }: { params: { id: string }; body: any }) => {
                 const { id } = params;
                 const data = await new Response(body).json();
                 const { name, uri, labels, save_to_disk, save_location } = data;
                 if (!name || !uri) {
-                    return new Response('Missing name or uri', { status: 400 });
+                    return new Response("Missing name or uri", { status: 400 });
                 }
                 const updated_at = new Date();
-                await updateMedia(id, { name, uri, labels: labels ?? [], save_to_disk: save_to_disk ? 1 : 0, save_location: save_location ?? '' });
+                await updateMedia(id, {
+                    name,
+                    uri,
+                    labels: labels ?? [],
+                    save_to_disk: save_to_disk ? 1 : 0,
+                    save_location: save_location ?? "",
+                });
                 return Response.json({ success: true });
             },
             DELETE: async ({ params }: { params: { id: string } }) => {
                 const { id } = params;
                 await deleteMedia(id);
                 return Response.json({ success: true });
-            }
+            },
         },
-        '/media': {
+        "/media": {
             GET: async () => {
                 const media = await getAllMedia();
                 media.sort((a, b) => b.updated_at - a.updated_at);
@@ -211,16 +289,26 @@ const server = Bun.serve({
             POST: async (req: Request) => {
                 const auth_res = await auth_required(settings, req);
                 if (auth_res.error) {
-                    return new Response(auth_res.error.msg, { status: auth_res.error.code || 401 });
+                    return new Response(auth_res.error.msg, {
+                        status: auth_res.error.code || 401,
+                    });
                 }
 
                 const body = await req.json();
                 const { name, uri, labels, save_to_disk, save_location } = body;
                 if (!name || !uri) {
-                    return new Response('Missing name or uri', { status: 400 });
+                    return new Response("Missing name or uri", { status: 400 });
                 }
                 const id = uuid();
-                await createMedia({ id, name, uri, labels: labels ?? [], updated_at: Date.now(), save_to_disk: save_to_disk ? 1 : 0, save_location: save_location ?? '' });
+                await createMedia({
+                    id,
+                    name,
+                    uri,
+                    labels: labels ?? [],
+                    updated_at: Date.now(),
+                    save_to_disk: save_to_disk ? 1 : 0,
+                    save_location: save_location ?? "",
+                });
 
                 logger.info(`New media added via API: ${name} (${id})`);
                 // Start the media stream
@@ -233,43 +321,43 @@ const server = Bun.serve({
                 return Response.json({ success: true, id });
             },
         },
-        '/query': {
+        "/query": {
             POST: async (req: Request) => {
                 // Only media_units table is supported for now
                 const body = await req.json();
 
                 if (!body.query) {
-                    return new Response('Missing query', { status: 400 });
+                    return new Response("Missing query", { status: 400 });
                 }
 
                 const query: RESTQuery = body.query;
-                if (query.table !== 'media_units') {
-                    return new Response('Invalid table in query', { status: 400 });
+                if (query.table !== "media_units") {
+                    return new Response("Invalid table in query", { status: 400 });
                 }
 
                 const media_units = await getByQuery(query);
                 return Response.json({ media_units });
-            }
+            },
         },
-        '/moments': {
+        "/moments": {
             GET: async () => {
                 const moments = await getAllMoments();
                 return Response.json(moments);
-            }
+            },
         },
-        '/moments/:id': {
+        "/moments/:id": {
             GET: async ({ params }: { params: { id: string } }) => {
                 const { id } = params;
                 const moment = await getMomentById(id);
 
                 if (!moment) {
-                    return new Response('Moment not found', { status: 404 });
+                    return new Response("Moment not found", { status: 404 });
                 }
 
                 return Response.json(moment);
-            }
+            },
         },
-        '/moments/:id/thumbnail': {
+        "/moments/:id/thumbnail": {
             GET: async ({ params }: { params: { id: string } }) => {
                 const { id } = params;
 
@@ -277,18 +365,21 @@ const server = Bun.serve({
                 const moment = await getMomentById(id);
 
                 if (!moment) {
-                    return new Response('Moment not found', { status: 404 });
+                    return new Response("Moment not found", { status: 404 });
                 }
 
                 if (!moment.thumbnail_path) {
-                    return new Response('No thumbnail available', { status: 404 });
+                    return new Response("No thumbnail available", { status: 404 });
                 }
 
                 // Validate that the thumbnail path is within FRAMES_DIR
                 const absoluteFilePath = path.resolve(moment.thumbnail_path);
                 if (!absoluteFilePath.startsWith(FRAMES_DIR)) {
-                    logger.error({ moment_id: id, path: moment.thumbnail_path }, 'Invalid thumbnail path');
-                    return new Response('Invalid thumbnail path', { status: 400 });
+                    logger.error(
+                        { moment_id: id, path: moment.thumbnail_path },
+                        "Invalid thumbnail path"
+                    );
+                    return new Response("Invalid thumbnail path", { status: 400 });
                 }
 
                 try {
@@ -296,23 +387,26 @@ const server = Bun.serve({
 
                     // Check if file exists
                     if (!(await file.exists())) {
-                        return new Response('Thumbnail file not found', { status: 404 });
+                        return new Response("Thumbnail file not found", { status: 404 });
                     }
 
                     const headers = new Headers();
-                    headers.set('Content-Type', file.type || 'image/jpeg');
-                    headers.set('Content-Disposition', 'inline');
-                    headers.set('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+                    headers.set("Content-Type", file.type || "image/jpeg");
+                    headers.set("Content-Disposition", "inline");
+                    headers.set("Cache-Control", "public, max-age=31536000"); // Cache for 1 year
 
                     return new Response(file.stream(), { headers });
                 } catch (error) {
-                    logger.error({ error, moment_id: id }, 'Error fetching moment thumbnail');
-                    return new Response('Error fetching thumbnail', { status: 500 });
+                    logger.error(
+                        { error, moment_id: id },
+                        "Error fetching moment thumbnail"
+                    );
+                    return new Response("Error fetching thumbnail", { status: 500 });
                 }
-            }
+            },
         },
 
-        '/settings': {
+        "/settings": {
             GET: async (req) => {
                 const settings = await getAllSettingsDB();
                 return Response.json(settings);
@@ -320,13 +414,15 @@ const server = Bun.serve({
             PUT: async (req: Request) => {
                 const auth_res = await auth_required(settings, req);
                 if (auth_res.error) {
-                    return new Response(auth_res.error.msg, { status: auth_res.error.code || 401 });
+                    return new Response(auth_res.error.msg, {
+                        status: auth_res.error.code || 401,
+                    });
                 }
 
                 const body = await req.json();
                 const { entries } = body;
                 if (!entries || !Array.isArray(entries)) {
-                    return new Response('Missing or invalid entries', { status: 400 });
+                    return new Response("Missing or invalid entries", { status: 400 });
                 }
 
                 for (const entry of entries) {
@@ -337,69 +433,75 @@ const server = Bun.serve({
                 }
 
                 return Response.json({ success: true });
-            }
+            },
         },
-        '/users': {
+        "/users": {
             GET: async () => {
                 const users = await getAllUsers();
                 const safeUsers = users.map(({ password_hash, ...rest }) => rest);
                 return Response.json(safeUsers);
             },
         },
-        '/files': {
+        "/files": {
             GET: async (req) => {
                 const url = new URL(req.url);
-                const file_path = url.searchParams.get('path');
+                const file_path = url.searchParams.get("path");
 
                 if (!file_path) {
-                    return new Response('Missing file path', { status: 400 });
+                    return new Response("Missing file path", { status: 400 });
                 }
 
                 const absoluteFilePath = path.resolve(file_path);
 
                 if (!absoluteFilePath.startsWith(FRAMES_DIR)) {
-                    return new Response('Invalid file path', { status: 400 });
+                    return new Response("Invalid file path", { status: 400 });
                 }
 
                 try {
                     const file = Bun.file(file_path);
                     const headers = new Headers();
-                    headers.set('Content-Type', file.type);
+                    headers.set("Content-Type", file.type);
 
-                    if (file.type.startsWith('image/')) {
-                        headers.set('Content-Disposition', 'inline');
+                    if (file.type.startsWith("image/")) {
+                        headers.set("Content-Disposition", "inline");
                     } else {
-                        headers.set('Content-Disposition', `attachment; filename="${file.name}"`);
+                        headers.set(
+                            "Content-Disposition",
+                            `attachment; filename="${file.name}"`
+                        );
                     }
 
                     return new Response(file.stream(), { headers });
                 } catch (error) {
-                    logger.error({ error }, 'Error fetching file');
-                    return new Response('Error fetching file', { status: 500 });
+                    logger.error({ error }, "Error fetching file");
+                    return new Response("Error fetching file", { status: 500 });
                 }
-            }
+            },
         },
-        '/search': {
+        "/search": {
             POST: async (req: Request) => {
                 const body = await req.json();
                 const { query } = body;
                 if (!query) {
-                    return new Response('Missing query', { status: 400 });
+                    return new Response("Missing query", { status: 400 });
                 }
 
                 // Generate the embedding for the query
 
                 // Forward search request to engine
-                const response = await fetch(`https://${ENGINE_URL}/api/worker/fast_embedding`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        job: {
-                            text: query,
-                            prompt_name: "query"
-                        }
-                    }),
-                });
+                const response = await fetch(
+                    `https://${ENGINE_URL}/api/worker/fast_embedding`,
+                    {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            job: {
+                                text: query,
+                                prompt_name: "query",
+                            },
+                        }),
+                    }
+                );
 
                 if (!response.ok || !response.body) {
                     throw new Error("Search request failed");
@@ -412,12 +514,12 @@ const server = Bun.serve({
                 }
 
                 const media_units = await getMediaUnitsByEmbedding(embedding, {
-                    requireDescription: true
+                    requireDescription: true,
                 });
                 return Response.json({ media_units });
-            }
+            },
         },
-        '/agents': {
+        "/agents": {
             GET: async () => {
                 const agents = await getAllAgents();
                 return Response.json(agents);
@@ -425,13 +527,15 @@ const server = Bun.serve({
             POST: async (req: Request) => {
                 const auth_res = await auth_required(settings, req);
                 if (auth_res.error) {
-                    return new Response(auth_res.error.msg, { status: auth_res.error.code || 401 });
+                    return new Response(auth_res.error.msg, {
+                        status: auth_res.error.code || 401,
+                    });
                 }
 
                 const body = await req.json();
                 const { name, instruction } = body;
                 if (!name || !instruction) {
-                    return new Response('Missing name or instruction', { status: 400 });
+                    return new Response("Missing name or instruction", { status: 400 });
                 }
                 const id = uuid();
                 await createAgent({ id, name, instruction });
@@ -440,18 +544,18 @@ const server = Bun.serve({
                 return Response.json({ success: true, id });
             },
         },
-        '/agents/:id': {
+        "/agents/:id": {
             DELETE: async ({ params }: { params: { id: string } }) => {
                 const { id } = params;
                 await deleteAgent(id);
                 return Response.json({ success: true });
-            }
+            },
         },
-        '/state': {
+        "/state": {
             GET: async () => {
                 return Response.json(state);
-            }
-        }
+            },
+        },
     },
     websocket: {
         open(ws) {
@@ -471,12 +575,12 @@ const server = Bun.serve({
         async message(ws, message) {
             try {
                 const decoded = decode(message as Buffer) as ClientToServerMessage;
-                if (decoded.type === 'set_subscription') {
+                if (decoded.type === "set_subscription") {
                     const client = clients.get(ws);
                     await client?.updateSubscription(decoded.subscription);
                 }
             } catch (error) {
-                logger.error(error, 'Error parsing websocket message');
+                logger.error(error, "Error parsing websocket message");
             }
         },
     },
@@ -534,8 +638,7 @@ const server = Bun.serve({
 
 logger.info(`Server running on ${HOSTNAME}:${PORT}`);
 
-
-if (process.env.DEV_MODE === 'lite') {
+if (process.env.DEV_MODE === "lite") {
     logger.info("Running in lite development mode - skipping stream startup");
 } else {
     // Start all streams from the database

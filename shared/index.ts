@@ -150,12 +150,3 @@ export type ServerEphemeralState = {
     moment_frames: Map<string, { id: string, at_time: number, data: Uint8Array }[]>;
     current_moment_ids: Map<string, string>; // media_id -> moment_id for active moments
 };
-
-export type InMemJob = Omit<RemoteJob, 'job_id'> & {
-    cont: (output: any) => void;
-};
-export type InMemWorkerRequest = Omit<WorkerRequest, 'jobs'> & {
-    jobs: InMemJob[];
-};
-
-
