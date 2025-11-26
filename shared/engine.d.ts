@@ -23,7 +23,7 @@ export type Resource = ({
     data: Uint8Array,
 } | {
     type: 'document',
-    content: string
+    data: string
 }) & {
     id: string,
 }

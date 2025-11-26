@@ -28,134 +28,134 @@ export const create_builders: (
     opts: ForwardingOpts,
 ) => { [builder_id: string]: Builder } = (opts) => {
     return {
-        'indexing': {
-            worker_types: ['vlm', 'embedding'],
-            interval: 3000,
-            should_run({ in_moment, last_time_run }) {
-                if (in_moment) return true;
-                const now = Date.now();
+        // 'indexing': {
+        //     worker_types: ['vlm', 'embedding'],
+        //     interval: 3000,
+        //     should_run({ in_moment, last_time_run }) {
+        //         if (in_moment) return true;
+        //         const now = Date.now();
 
-                // Ocassionally run every minute
-                return now - last_time_run > 60000
-            },
-            async write(media_id: string, media_unit_id: string, data: Uint8Array) {
-                // Write data to file
-                const _path = path.join(FRAMES_DIR, `${media_unit_id}.jpg`);
-                await Bun.write(_path, data);
+        //         // Ocassionally run every minute
+        //         return now - last_time_run > 60000
+        //     },
+        //     async write(media_id: string, media_unit_id: string, data: Uint8Array) {
+        //         // Write data to file
+        //         const _path = path.join(FRAMES_DIR, `${media_unit_id}.jpg`);
+        //         await Bun.write(_path, data);
 
-                // Store in database
-                const mu = {
-                    id: media_unit_id,
-                    type: 'frame',
-                    at_time: Date.now(), // Using timestamp instead of Date object
-                    description: null,
-                    embedding: null,
-                    media_id,
-                    path: _path,
-                };
-                await createMediaUnit(mu)
-            },
+        //         // Store in database
+        //         const mu = {
+        //             id: media_unit_id,
+        //             type: 'frame',
+        //             at_time: Date.now(), // Using timestamp instead of Date object
+        //             description: null,
+        //             embedding: null,
+        //             media_id,
+        //             path: _path,
+        //         };
+        //         await createMediaUnit(mu)
+        //     },
   
-            async build({ worker_type, media_id, media_unit_id }) {
-                if (worker_type == 'vlm') {
-                    return {
-                        worker_type,
-                        input: {
-                            messages: [
-                                { role: 'user', content: [{ type: 'text', text: 'Provide a concise description of the content of this image in a few words.' }] },
-                                { role: 'assistant', content: [{ type: 'image', image: { __type: 'resource-ref', id: media_unit_id } }] },
-                            ]
-                        } as WorkerInput__Vlm,
-                        async cont(output: WorkerOutput__Vlm) {
-                                let description = output.response;
+        //     async build({ worker_type, media_id, media_unit_id }) {
+        //         if (worker_type == 'vlm') {
+        //             return {
+        //                 worker_type,
+        //                 input: {
+        //                     messages: [
+        //                         { role: 'user', content: [{ type: 'text', text: 'Provide a concise description of the content of this image in a few words.' }] },
+        //                         { role: 'assistant', content: [{ type: 'image', image: { __type: 'resource-ref', id: media_unit_id } }] },
+        //                     ]
+        //                 } as WorkerInput__Vlm,
+        //                 async cont(output: WorkerOutput__Vlm) {
+        //                         let description = output.response;
 
-                            // Try to remove common prefixes
-                            // E.g., "This image depicts ...", "This image captures ...", "In this image, ", "The image shows ...", "The image captures ..."
-                            const prefixes = [
-                                "This is an image of a ",
-                                "The image is ",
-                                "The image depicts ",
-                                "The image captures ",
-                                "This image depicts ",
-                                "This image captures ",
-                                "In this image, ",
-                                "The image shows ",
-                                "The image captures ",
-                                "This photo depicts ",
-                                "This photo captures ",
-                                "In this photo, ",
-                                "The photo shows ",
-                                "The photo captures ",
-                            ];
-                            for (const prefix of prefixes) {
-                                if (description.startsWith(prefix)) {
-                                    description = description.slice(prefix.length);
-                                    // Properly capitalize first letter
-                                    description = description.charAt(0).toUpperCase() + description.slice(1);
-                                    break;
-                                }
-                            }
+        //                     // Try to remove common prefixes
+        //                     // E.g., "This image depicts ...", "This image captures ...", "In this image, ", "The image shows ...", "The image captures ..."
+        //                     const prefixes = [
+        //                         "This is an image of a ",
+        //                         "The image is ",
+        //                         "The image depicts ",
+        //                         "The image captures ",
+        //                         "This image depicts ",
+        //                         "This image captures ",
+        //                         "In this image, ",
+        //                         "The image shows ",
+        //                         "The image captures ",
+        //                         "This photo depicts ",
+        //                         "This photo captures ",
+        //                         "In this photo, ",
+        //                         "The photo shows ",
+        //                         "The photo captures ",
+        //                     ];
+        //                     for (const prefix of prefixes) {
+        //                         if (description.startsWith(prefix)) {
+        //                             description = description.slice(prefix.length);
+        //                             // Properly capitalize first letter
+        //                             description = description.charAt(0).toUpperCase() + description.slice(1);
+        //                             break;
+        //                         }
+        //                     }
 
-                            const mu = await getMediaUnitById(media_unit_id);
-                            if (!mu) {
-                                logger.error(`MediaUnit not found for media_unit_id ${media_unit_id}`);
-                                return;
-                            }
+        //                     const mu = await getMediaUnitById(media_unit_id);
+        //                     if (!mu) {
+        //                         logger.error(`MediaUnit not found for media_unit_id ${media_unit_id}`);
+        //                         return;
+        //                     }
 
-                            const msg: ServerToClientMessage = {
-                                type: 'agent_card',
-                                media_unit: {
-                                    ...mu,
-                                    description,
-                                }
-                            }
+        //                     const msg: ServerToClientMessage = {
+        //                         type: 'agent_card',
+        //                         media_unit: {
+        //                             ...mu,
+        //                             description,
+        //                         }
+        //                     }
 
-                            // Forward to clients 
-                            for (const [id, client] of opts.clients.entries()) {
-                                client.send(msg);
-                            }
+        //                     // Forward to clients 
+        //                     for (const [id, client] of opts.clients.entries()) {
+        //                         client.send(msg);
+        //                     }
 
-                            // Also forward to webhook
-                            opts.forward_to_webhook({
-                                event: 'description',
-                                created_at: new Date().toISOString(),
-                                media_unit_id: mu.id,
-                                media_id: mu.media_id,
-                                description,
-                            });
+        //                     // Also forward to webhook
+        //                     opts.forward_to_webhook({
+        //                         event: 'description',
+        //                         created_at: new Date().toISOString(),
+        //                         media_unit_id: mu.id,
+        //                         media_id: mu.media_id,
+        //                         description,
+        //                     });
 
-                            // Update media unit in database
-                            updateMediaUnit(media_unit_id, {
-                                description,
-                            })
-                        },
-                    };
-                }
+        //                     // Update media unit in database
+        //                     updateMediaUnit(media_unit_id, {
+        //                         description,
+        //                     })
+        //                 },
+        //             };
+        //         }
                 
-                if (worker_type == 'embedding') {
-                    return {
-                        worker_type,
-                        input: {
-                            filepath: {
-                                __type: 'resource-ref',
-                                id: media_unit_id,
-                            } 
-                        } as WorkerInput__Embedding,
-                        async cont(output: WorkerOutput__Embedding) {
-                             // Convert number[] to Uint8Array for database storage
-                            const embeddingBuffer = output.embedding ? new Uint8Array(new Float32Array(output.embedding).buffer) : null;
+        //         if (worker_type == 'embedding') {
+        //             return {
+        //                 worker_type,
+        //                 input: {
+        //                     filepath: {
+        //                         __type: 'resource-ref',
+        //                         id: media_unit_id,
+        //                     } 
+        //                 } as WorkerInput__Embedding,
+        //                 async cont(output: WorkerOutput__Embedding) {
+        //                      // Convert number[] to Uint8Array for database storage
+        //                     const embeddingBuffer = output.embedding ? new Uint8Array(new Float32Array(output.embedding).buffer) : null;
 
-                            // Store in database
-                            updateMediaUnit(media_unit_id, {
-                                embedding: embeddingBuffer,
-                            })
-                        },
-                    };
-                }
+        //                     // Store in database
+        //                     updateMediaUnit(media_unit_id, {
+        //                         embedding: embeddingBuffer,
+        //                     })
+        //                 },
+        //             };
+        //         }
 
-                impossible(worker_type as never);
-            }
-        },
+        //         impossible(worker_type as never);
+        //     }
+        // },
 //         'object_detection': {
 //             worker_types: ['object_detection'],
 //             interval: 1000,

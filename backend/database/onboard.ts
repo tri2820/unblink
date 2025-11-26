@@ -8,17 +8,17 @@ export async function onboardMedia(db: Database) {
         entries: [
             {
                 name: "Building Top",
-                uri: "rtsp://www.cactus.tv:1554/cam58",
+                uri: "/home/tri/test_videos/1.mp4",
                 labels: ["Urban"]
             },
             {
                 name: "Panama Port",
-                uri: "http://200.46.196.243/axis-cgi/media.cgi?camera=1&videoframeskipmode=empty&videozprofile=classic&resolution=1280x720&audiodeviceid=0&audioinputid=0&audiocodec=aac&audiosamplerate=16000&audiobitrate=32000&timestamp=0&videocodec=h264&container=mp4",
+                uri: "/home/tri/test_videos/2.mp4",
                 labels: ["Transportation Hub"]
             },
             {
                 name: "Parking Lot",
-                uri: "http://83.48.75.113:8320/axis-cgi/mjpg/video.cgi",
+                uri: "/home/tri/test_videos/3.mp4",
                 labels: ["Urban"]
             },
         ],

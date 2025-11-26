@@ -19,7 +19,7 @@ async function summarizeMoment(
     momentId: string,
     send_to_engine: (msg: InMemWorkerRequest) => void,
     retryCount: number = 0,
-    maxRetries: number = 10
+    maxRetries: number = 3
 ) {
     if (frames.length === 0) {
         logger.warn(`No frames provided for moment ${momentId}, skipping summarization`);
@@ -44,14 +44,29 @@ async function summarizeMoment(
                 worker_type: 'vlm',
                 // resources: resources.map(r => ({ id: r.id })),
                 input: {
-                    messages: [
-                        { role: 'system', content: [{ type: 'text', text: 'You are an AI assistant that analyzes multiple images and provides unified titles and descriptions.' }] },
-                        { role: 'user', content: [
-                            { type: 'text', text: 'Analyze these images and provide a single title and description that encompasses both of them. Your response must be valid JSON containing only the keys \'title\' and \'description\', with no additional keys, markdown, or extra text. Format: {"title": "string", "description": "string"}' },
-                            ...image_resources.map(r => ({ type: 'image' as const, image: { __type: 'resource-ref' as const, id: r.id } }))
-                        ] }
-                    ]
-                } as WorkerInput__Vlm,
+                messages: [
+                    { 
+                        role: 'system', 
+                        content: [{ 
+                            type: 'text', 
+                            text: 'You are a helpful assistant that outputs only valid JSON. You help formatting video content.' 
+                        }] 
+                    },
+                    { 
+                        role: 'user', 
+                        content: [
+                            { 
+                                type: 'text', 
+                                text: 'These are frames of a video. What is happening? Who are doing what? Output JSON:\n{"title": "who doing what", "description": "concise description"}\nOnly output valid JSON, nothing else.' 
+                            },
+                            ...image_resources.map(r => ({ 
+                                type: 'image' as const, 
+                                image: { __type: 'resource-ref' as const, id: r.id } 
+                            }))
+                        ] 
+                    }
+                ]
+            } as WorkerInput__Vlm,
                 async cont(output) {
                     logger.info({ momentId, output }, 'Received summarization response');
                     const parsed = parseJsonFromString(output.response);

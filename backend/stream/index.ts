@@ -392,10 +392,120 @@ export async function streamMedia(
     if (startArg.init_seek_sec) {
         input.seekSync(startArg.init_seek_sec);
     }
+
+    /**
+     * Determine stream type and timing strategy:
+     * - 'file': File-based sources (includes both ephemeral and continuous feeds)
+     *           Uses dual-delay system for smooth playback at native frame rate
+     * - 'live': RTSP/HTTP live streams - uses simple FPS throttling
+     */
+    const isFileSource = await (async () => {
+        try {
+            await fs.access(startArg.uri);
+            return true;
+        } catch {
+            return false;
+        }
+    })();
+
+    const timeSyncType: 'file' | 'live' = (isFileSource || startArg.is_ephemeral) ? 'file' : 'live';
+
+    logger.info({ 
+        uri: startArg.uri, 
+        timeSyncType,
+        isEphemeral: startArg.is_ephemeral,
+        avgFrameRate: videoStream.avgFrameRate 
+    }, "Stream timing configuration");
+
     const packets = input.packets();
-    let last_send_time = 0;
-    let firstPacketPts: bigint | null = null;
-    let playbackStartTime = 0;
+    
+    // Frame timing state
+    // Calculate target frame interval with validation
+    let targetFrameIntervalMs = (videoStream.avgFrameRate.den * 1000) / videoStream.avgFrameRate.num;
+    if (!isFinite(targetFrameIntervalMs) || targetFrameIntervalMs <= 0) {
+        logger.warn({ 
+            avgFrameRate: videoStream.avgFrameRate,
+            calculated: targetFrameIntervalMs 
+        }, "Invalid frame rate detected, defaulting to 30 FPS");
+        targetFrameIntervalMs = 1000 / 30; // Default to 30 FPS
+    }
+    
+    const timingState = {
+        firstPacketPts: null as bigint | null,
+        playbackStartTime: 0,
+        lastFrameSendTime: 0,
+        lastLiveStreamSendTime: 0,
+        targetFrameIntervalMs,
+    };
+
+    /**
+     * Calculate timing information based on PTS (Presentation Time Stamp)
+     * Converts PTS to real-world milliseconds using the stream's timebase
+     */
+    const calculatePTSTiming = (packet: Packet) => {
+        if (timingState.firstPacketPts === null) return null;
+        
+        const ptsDiff = packet.pts - timingState.firstPacketPts;
+        const elapsedFileTimeMs = Number(ptsDiff) * videoStream.timeBase.num * 1000 / videoStream.timeBase.den;
+        const targetTime = timingState.playbackStartTime + elapsedFileTimeMs;
+        
+        return { elapsedFileTimeMs, targetTime };
+    };
+
+    /**
+     * Apply frame timing strategy based on stream type
+     * @param beforeProcessing - true for pre-processing delays, false for post-processing delays
+     * @returns 'skip' if frame should be skipped (live stream throttling), undefined otherwise
+     */
+    const applyFrameTiming = async (packet: Packet, beforeProcessing: boolean): Promise<'skip' | undefined> => {
+        // Initialize timing on first frame for file-based streams
+        if (timingState.firstPacketPts === null && timeSyncType === 'file') {
+            timingState.firstPacketPts = packet.pts;
+            timingState.playbackStartTime = Date.now();
+            logger.debug({ pts: packet.pts, timeSyncType }, "Starting timed playback");
+            return;
+        }
+
+        if (timeSyncType === 'live') {
+            // Live streams: Simple 30 FPS throttling (no PTS timing needed)
+            const now = Date.now();
+            if (now - timingState.lastLiveStreamSendTime < 1000 / 30) {
+                return 'skip';
+            }
+            timingState.lastLiveStreamSendTime = now;
+        } else if (timeSyncType === 'file') {
+            // File streams: Dual-delay system for smooth continuous streaming
+            // Works for both ephemeral (moment playback) and continuous camera feeds
+            if (beforeProcessing && timingState.lastFrameSendTime > 0) {
+                // Pre-processing: Prevent frame bursts by enforcing minimum interval
+                const timeSinceLastFrame = Date.now() - timingState.lastFrameSendTime;
+                if (timeSinceLastFrame < timingState.targetFrameIntervalMs) {
+                    const preDelay = timingState.targetFrameIntervalMs - timeSinceLastFrame;
+                    // Cap delay to reasonable maximum (5 seconds) to prevent overflow
+                    const cappedDelay = Math.min(preDelay, 5000);
+                    if (cappedDelay > 0 && isFinite(cappedDelay)) {
+                        await new Promise(resolve => setTimeout(resolve, cappedDelay));
+                    }
+                }
+            } else if (!beforeProcessing) {
+                // Post-processing: Fine-tune timing with PTS for accuracy
+                const timing = calculatePTSTiming(packet);
+                if (timing) {
+                    const delay = timing.targetTime - Date.now();
+                    if (delay > 0) {
+                        // Cap delay to reasonable maximum (5 seconds) to prevent overflow
+                        const cappedDelay = Math.min(delay, 5000);
+                        if (isFinite(cappedDelay)) {
+                            await new Promise(resolve => setTimeout(resolve, cappedDelay));
+                        }
+                    } else if (delay < -100) {
+                        logger.debug({ delay, pts: packet.pts }, "File playback running behind schedule");
+                    }
+                }
+                timingState.lastFrameSendTime = Date.now();
+            }
+        }
+    };
 
     logger.info("Entering main streaming loop");
 
@@ -463,45 +573,28 @@ export async function streamMedia(
                 continue;
             }
 
-            // Handle frame timing
-            if (startArg.is_ephemeral) {
-                // For ephemeral streams (moment playback), respect original timing from file
-                if (last_send_time === 0) {
-                    last_send_time = Date.now();
-                    firstPacketPts = packet.pts;
-                    playbackStartTime = last_send_time;
-                }
-
-                // Calculate when this frame should be sent based on packet timestamp
-                const elapsedFileTime = Number((packet.pts - (firstPacketPts || 0n)) * BigInt(videoStream.timeBase.num * 1000) / BigInt(videoStream.timeBase.den));
-                const targetTime = playbackStartTime + elapsedFileTime;
-                const now = Date.now();
-                const delay = targetTime - now;
-
-                if (delay > 0) {
-                    // Wait until it's time to send this frame
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                }
-            } else {
-                // For live streams, limit to 30 FPS
-                const now = Date.now();
-                if (now - last_send_time < 1000 / 30) {
-                    packet.free();
-                    decodedFrame.free();
-                    continue;
-                }
-                last_send_time = now;
+            // Apply pre-processing timing
+            const shouldSkip = await applyFrameTiming(packet, true);
+            if (shouldSkip === 'skip') {
+                packet.free();
+                decodedFrame.free();
+                continue;
             }
 
             try {
+                // Calculate timestamp for ephemeral streams (for UI progress)
                 let timestamp: number | undefined;
                 if (startArg.is_ephemeral) {
-                    const elapsedFileTime = Number((packet.pts - (firstPacketPts || 0n)) * BigInt(videoStream.timeBase.num * 1000) / BigInt(videoStream.timeBase.den));
-                    // Calculate seek offset on the fly and add to elapsed time
-                    timestamp = (startArg.init_seek_sec || 0) * 1000 + elapsedFileTime;
+                    const timing = calculatePTSTiming(packet);
+                    if (timing) {
+                        timestamp = (startArg.init_seek_sec || 0) * 1000 + timing.elapsedFileTimeMs;
+                    }
                 }
 
                 await processPacket(packet, decodedFrame, timestamp);
+                
+                // Apply post-processing timing
+                await applyFrameTiming(packet, false);
             } catch (error) {
                 logger.error({ error: (error as Error).message }, "Error processing packet");
             } finally {
