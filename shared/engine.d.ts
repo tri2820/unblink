@@ -145,6 +145,7 @@ export type WorkerOutput__Segmentation_Result = {
     frame_count: number;
     objects: number[]; // Object IDs
     scores: number[]; // Confidence scores
+    labels: string[]; // Class labels per object (from prompts)
     boxes: number[][]; // Bounding boxes [x_min, y_min, x_max, y_max]
     masks: Array<{
         size: [number, number]; // [height, width]

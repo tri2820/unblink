@@ -40,13 +40,15 @@ export type SegmentationMessage = {
     media_id: string;
     media_unit_id: string;
     frame_count: number;
-    objects: number[];
+    objects: number[]; // Instance IDs
     scores: number[];
     boxes: number[][];
     masks: Array<{
         size: [number, number];
         counts: number[] | string;
     }>;
+    classes: string[]; // Available class names (e.g., ['person', 'vehicle', 'animal'])
+    labels?: string[]; // Per-object labels (same length as objects array)
 }
 
 

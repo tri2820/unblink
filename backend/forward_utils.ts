@@ -199,7 +199,7 @@ export const create_builders: (opts: ForwardingOpts) => {
     },
     segmentation: {
       worker_types: ["segmentation"],
-      interval: 1000,
+      interval: 3000,
       should_run({ in_moment }) {
         return true;
       },
@@ -224,6 +224,7 @@ export const create_builders: (opts: ForwardingOpts) => {
               return;
             }
 
+            const prompts = ["person", "vehicle", "animal"]; // Should match the prompts sent to the worker
             const msg: SegmentationMessage = {
               type: "segmentation",
               media_id,
@@ -233,6 +234,8 @@ export const create_builders: (opts: ForwardingOpts) => {
               scores: output.scores,
               boxes: output.boxes,
               masks: output.masks,
+              classes: prompts,
+              labels: output.labels,
             };
             
             opts.forward_to_webhook({
