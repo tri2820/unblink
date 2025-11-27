@@ -323,7 +323,6 @@ const server = Bun.serve({
         },
         "/query": {
             POST: async (req: Request) => {
-                // Only media_units table is supported for now
                 const body = await req.json();
 
                 if (!body.query) {
@@ -331,12 +330,17 @@ const server = Bun.serve({
                 }
 
                 const query: RESTQuery = body.query;
-                if (query.table !== "media_units") {
+                
+                // Whitelist supported tables
+                const supportedTables = ["media_units", "agent_responses", "agents", "moments"];
+                if (!supportedTables.includes(query.table)) {
                     return new Response("Invalid table in query", { status: 400 });
                 }
 
-                const media_units = await getByQuery(query);
-                return Response.json({ media_units });
+                const results = await getByQuery(query);
+                
+                // Return results with the table name as the key
+                return Response.json({ [query.table]: results });
             },
         },
         "/moments": {

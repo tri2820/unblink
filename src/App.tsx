@@ -11,7 +11,7 @@ import SearchContent from './content/SearchContent';
 import SearchResultContent from './content/SearchResultContent';
 import SettingsContent from './content/SettingsContent';
 import AgentsContent from './content/AgentsContent';
-import { cameras, conn, fetchCameras, setAgentCards, setConn, setStatsMessages, subscription, tab, viewedMedias, type Tab } from './shared';
+import { cameras, conn, fetchCameras, fetchAgentCards, setAgentCards, setConn, setStatsMessages, subscription, tab, viewedMedias, type Tab } from './shared';
 import SideBar from './SideBar';
 import { connectWebSocket, newMessage } from './video/connection';
 import ViewContent from './ViewContent';
@@ -88,7 +88,7 @@ export default function App() {
 
     })
 
-    // Fetch agent cards for all medias (5 for each)
+    // Fetch agent cards for all medias (5 for each from media_units and agent_responses)
     createEffect(async () => {
         const allCameras = cameras();
         if (!allCameras || allCameras.length === 0) {
@@ -97,48 +97,10 @@ export default function App() {
 
         console.log('Fetching agent cards for all medias:', allCameras);
 
-        // Fetch 5 most recent media units for each camera
-        const fetchPromises = allCameras.map(async (camera) => {
-            const resp = await fetch('/query', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    query: {
-                        table: 'media_units',
-                        where: [{
-                            'field': 'media_id', 'op': 'equals', 'value': camera.id,
-                        }, {
-                            'field': 'description', 'op': 'is_not', 'value': null
-                        }],
-                        select: ['id', 'media_id', 'at_time', 'description', 'path', 'type'],
-                        limit: 5,
-                        order_by: { field: 'at_time', direction: 'DESC' }
-                    } as RESTQuery,
-                }),
-            });
-
-            if (resp.ok) {
-                const data = await resp.json() as { media_units: MediaUnit[] };
-                // Convert MediaUnits to AgentCards
-                return data.media_units.map(unit => ({
-                    id: unit.id,
-                    content: unit.description || '',
-                    media_id: unit.media_id,
-                    media_unit_id: unit.id,
-                    at_time: unit.at_time,
-                    path: unit.path,
-                    type: unit.type,
-                }));
-            } else {
-                console.error(`Failed to fetch media units for camera ${camera.id}`);
-                return [];
-            }
-        });
-
+        const fetchPromises = allCameras.map(camera => fetchAgentCards(camera.id));
         const results = await Promise.all(fetchPromises);
         const allAgentCards = results.flat();
+        
         console.log('Fetched agent cards for all cameras:', allAgentCards.length);
         setAgentCards(allAgentCards);
     })

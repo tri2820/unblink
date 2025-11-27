@@ -1,19 +1,53 @@
 import { formatDistance } from "date-fns";
 import { FaSolidChevronLeft, FaSolidChevronRight } from "solid-icons/fa";
-import { For, Show, createSignal } from "solid-js";
+import { FiEye } from "solid-icons/fi";
+import { For, Show, createSignal, createMemo, onMount } from "solid-js";
 import LoadingSkeleton from "./search/LoadingSkeleton";
-import { cameras, relevantAgentCards } from "./shared";
+import { cameras, relevantAgentCards, agents, fetchAgents } from "./shared";
+import { ArkSelect, type SelectItem } from "./ark/ArkSelect";
 
 export function useAgentBar() {
     const [showAgentBar, setShowAgentBar] = createSignal(true);
+    const [selectedAgent, setSelectedAgent] = createSignal('all');
+
+    // Fetch agents when component mounts
+    onMount(() => {
+        fetchAgents();
+    });
+
+    // Get agent names from agents table
+    const agentOptions = createMemo<SelectItem[]>(() => {
+        const agentsList = agents();
+        
+        return [
+            { label: 'All Agents', value: 'all' },
+            ...agentsList.map(agent => ({
+                label: agent.name,
+                value: agent.name
+            }))
+        ];
+    });
+
+    // Filter cards based on selected agent
+    const filteredCards = createMemo(() => {
+        const selected = selectedAgent();
+        if (selected === 'all') {
+            return relevantAgentCards();
+        }
+        return relevantAgentCards().filter(card => card.agent_name === selected);
+    });
 
     const Toggle = () => <button
             onClick={() => setShowAgentBar(prev => !prev)}
             class="btn-small">
-            <Show when={showAgentBar()} fallback={<FaSolidChevronLeft class="w-4 h-4 " />}>
+            <Show when={showAgentBar()} fallback={
+                <>
+                    <FaSolidChevronLeft class="w-4 h-4 " />
+                    <div>Agents</div>
+                </>
+            }>
                 <FaSolidChevronRight class="w-4 h-4 " />
             </Show>
-            <div>Agents</div>
 
         </button>
     return {
@@ -24,8 +58,17 @@ export function useAgentBar() {
             data-show={showAgentBar()}
             class="flex-none data-[show=true]:w-xl w-0 h-screen transition-[width] duration-300 ease-in-out overflow-hidden flex flex-col">
             <div class="border-l border-neu-800 bg-neu-900 shadow-2xl rounded-2xl flex-1 mr-2 my-2 flex flex-col h-full overflow-hidden">
-                <div class="h-14 flex items-center p-2">
+                <div class="h-14 flex items-center gap-2 p-2">
                     <Toggle />
+                    <Show when={showAgentBar()}>
+                        <ArkSelect
+                            items={agentOptions()}
+                            value={selectedAgent}
+                            onValueChange={(details) => setSelectedAgent(details.value[0] || 'all')}
+                            placeholder="Filter by agent"
+                            positioning={{ sameWidth: true }}
+                        />
+                    </Show>
                 </div>
 
                 <Show when={showAgentBar()}>
@@ -33,7 +76,7 @@ export function useAgentBar() {
                         <Show when={relevantAgentCards().length > 0} fallback={
                             <LoadingSkeleton />
                         }>
-                            <For each={relevantAgentCards()}>
+                            <For each={filteredCards()}>
                                 {(card) => {
                                     const stream_name = () => {
                                         const camera = cameras().find(c => c.id === card.media_id);
@@ -43,7 +86,8 @@ export function useAgentBar() {
                                         <div class="flex items-center justify-between">
                                             <div class="font-semibold">{stream_name()}</div>
                                             <Show when={card.agent_name}>
-                                                <div class="text-xs px-2 py-1 bg-neu-800 rounded-lg text-neu-300 font-medium">
+                                                <div class="flex items-center gap-1.5 text-xs px-2 py-1 bg-neu-800 rounded-lg text-neu-300 font-medium">
+                                                    <FiEye class="w-3 h-3" />
                                                     {card.agent_name}
                                                 </div>
                                             </Show>

@@ -1,7 +1,17 @@
 import { expect, test, beforeAll, afterAll } from "bun:test";
-import { getByQuery, createMediaUnit, deleteMediaUnit, createMedia, deleteMedia } from '../utils';
+import { 
+    getByQuery, 
+    createMediaUnit, 
+    deleteMediaUnit, 
+    createMedia, 
+    deleteMedia,
+    createAgent,
+    deleteAgent,
+    createAgentResponse,
+    deleteAgentResponse
+} from '../utils';
 import { getDb, closeDb } from '../database';
-import type { MediaUnit } from '~/shared/database';
+import type { MediaUnit, Agent, AgentResponse } from '~/shared/database';
 
 let testMediaId: string;
 let createdMediaUnitIds: string[] = [];
@@ -238,4 +248,299 @@ test("getByQuery - in operation (multiple media_ids)", async () => {
     // Cleanup
     await deleteMedia(testMediaId2);
 });
+
+test("getByQuery - Join agent_responses with media_units and agents", async () => {
+    const agentId = crypto.randomUUID();
+    const agent: Agent = {
+        id: agentId,
+        name: 'Test Query Agent',
+        instruction: 'Test instruction for query'
+    };
+    await createAgent(agent);
+
+    const responseId = crypto.randomUUID();
+    const testMediaUnitId = createdMediaUnitIds[0];
+    expect(testMediaUnitId).toBeDefined();
+    
+    const agentResponse: AgentResponse = {
+        id: responseId,
+        agent_id: agentId,
+        media_unit_id: testMediaUnitId!,
+        content: 'Test agent response content',
+        created_at: Date.now()
+    };
+    await createAgentResponse(agentResponse);
+
+    const results = await getByQuery({
+        table: 'agent_responses',
+        joins: [
+            {
+                table: 'media_units',
+                on: { left: 'media_unit_id', right: 'id' }
+            },
+            {
+                table: 'agents',
+                on: { left: 'agent_id', right: 'id' }
+            }
+        ],
+        where: [
+            { field: 'media_units.media_id', op: 'equals', value: testMediaId }
+        ],
+        select: [
+            'agent_responses.id',
+            'agent_responses.content',
+            'agent_responses.created_at',
+            'media_units.media_id',
+            'media_units.at_time',
+            'agents.name as agent_name'
+        ],
+        limit: 10
+    });
+
+    expect(results.length).toBe(1);
+    
+    const result = results[0];
+    expect(result).toBeDefined();
+    expect(result.content).toBe('Test agent response content');
+    expect(result.media_id).toBe(testMediaId);
+    expect(result.agent_name).toBe('Test Query Agent');
+    expect(result.at_time).toBeDefined();
+
+    await deleteAgentResponse(responseId);
+    await deleteAgent(agentId);
+});
+
+test("getByQuery - Multiple joins with order by", async () => {
+    const agentId = crypto.randomUUID();
+    const agent: Agent = {
+        id: agentId,
+        name: 'Multi Join Agent',
+        instruction: 'Test instruction'
+    };
+    await createAgent(agent);
+
+    const responseIds: string[] = [];
+    const baseTime = Date.now();
+    const numResponses = 3;
+    
+    for (let i = 0; i < numResponses; i++) {
+        const responseId = crypto.randomUUID();
+        responseIds.push(responseId);
+        
+        const mediaUnitId = createdMediaUnitIds[i];
+        expect(mediaUnitId).toBeDefined();
+        
+        const agentResponse: AgentResponse = {
+            id: responseId,
+            agent_id: agentId,
+            media_unit_id: mediaUnitId!,
+            content: `Response ${i}`,
+            created_at: baseTime + (i * 1000)
+        };
+        await createAgentResponse(agentResponse);
+    }
+
+    const results = await getByQuery({
+        table: 'agent_responses',
+        joins: [
+            {
+                table: 'media_units',
+                on: { left: 'media_unit_id', right: 'id' }
+            },
+            {
+                table: 'agents',
+                on: { left: 'agent_id', right: 'id' }
+            }
+        ],
+        where: [
+            { field: 'agents.id', op: 'equals', value: agentId }
+        ],
+        select: [
+            'agent_responses.id',
+            'agent_responses.content',
+            'agent_responses.created_at',
+            'agents.name as agent_name'
+        ],
+        order_by: { field: 'agent_responses.created_at', direction: 'DESC' },
+        limit: 10
+    });
+
+    expect(results.length).toBe(numResponses);
+    
+    // Verify descending order by checking timestamps
+    for (let i = 0; i < results.length - 1; i++) {
+        expect(results[i].created_at).toBeGreaterThan(results[i + 1].created_at);
+    }
+    
+    // Verify content matches expected order
+    expect(results[0].content).toBe('Response 2');
+    expect(results[1].content).toBe('Response 1');
+    expect(results[2].content).toBe('Response 0');
+    
+    // Verify all results have agent name from join
+    for (const result of results) {
+        expect(result.agent_name).toBe('Multi Join Agent');
+    }
+
+    for (const id of responseIds) {
+        await deleteAgentResponse(id);
+    }
+    await deleteAgent(agentId);
+});
+
+// Security Tests
+test("getByQuery - Reject invalid table name", async () => {
+    try {
+        await getByQuery({
+            table: 'users; DROP TABLE media_units;--',
+            where: [{ field: 'id', op: 'equals', value: 'test' }]
+        });
+        expect(true).toBe(false); // Should not reach here
+    } catch (error: any) {
+        expect(error.message).toContain('Invalid table');
+    }
+});
+
+test("getByQuery - Reject invalid field with SQL injection attempt", async () => {
+    try {
+        await getByQuery({
+            table: 'media_units',
+            where: [{ field: 'id; DROP TABLE media_units;--', op: 'equals', value: 'test' }]
+        });
+        expect(true).toBe(false); // Should not reach here
+    } catch (error: any) {
+        expect(error.message).toContain('Invalid field identifier');
+    }
+});
+
+test("getByQuery - Reject invalid column name in select", async () => {
+    try {
+        await getByQuery({
+            table: 'media_units',
+            select: ['id', 'nonexistent_column'],
+            where: [{ field: 'media_id', op: 'equals', value: testMediaId }],
+            limit: 1
+        });
+        expect(true).toBe(false); // Should not reach here
+    } catch (error: any) {
+        expect(error.message).toContain('Invalid field');
+    }
+});
+
+test("getByQuery - Reject invalid table in join", async () => {
+    try {
+        await getByQuery({
+            table: 'media_units',
+            joins: [{
+                table: 'fake_table',
+                on: { left: 'id', right: 'id' }
+            }],
+            where: [{ field: 'media_id', op: 'equals', value: testMediaId }],
+            limit: 1
+        });
+        expect(true).toBe(false); // Should not reach here
+    } catch (error: any) {
+        expect(error.message).toContain('Invalid table');
+    }
+});
+
+test("getByQuery - Reject invalid join column", async () => {
+    try {
+        await getByQuery({
+            table: 'agent_responses',
+            joins: [{
+                table: 'agents',
+                on: { left: 'fake_column', right: 'id' }
+            }],
+            where: [{ field: 'agent_id', op: 'equals', value: 'test' }],
+            limit: 1
+        });
+        expect(true).toBe(false); // Should not reach here
+    } catch (error: any) {
+        expect(error.message).toContain('Invalid');
+    }
+});
+
+test("getByQuery - Enforce maximum select fields", async () => {
+    try {
+        const manyFields = Array.from({ length: 51 }, (_, i) => `id`);
+        await getByQuery({
+            table: 'media_units',
+            select: manyFields,
+            where: [{ field: 'media_id', op: 'equals', value: testMediaId }],
+            limit: 1
+        });
+        expect(true).toBe(false); // Should not reach here
+    } catch (error: any) {
+        expect(error.message).toContain('Too many select fields');
+    }
+});
+
+test("getByQuery - Enforce maximum joins", async () => {
+    try {
+        const manyJoins = Array.from({ length: 11 }, () => ({
+            table: 'agents',
+            on: { left: 'id', right: 'id' }
+        }));
+        await getByQuery({
+            table: 'media_units',
+            joins: manyJoins,
+            limit: 1
+        });
+        expect(true).toBe(false); // Should not reach here
+    } catch (error: any) {
+        expect(error.message).toContain('Too many joins');
+    }
+});
+
+test("getByQuery - Enforce maximum WHERE conditions", async () => {
+    try {
+        const manyConditions = Array.from({ length: 21 }, () => ({
+            field: 'id',
+            op: 'equals' as const,
+            value: 'test'
+        }));
+        await getByQuery({
+            table: 'media_units',
+            where: manyConditions,
+            limit: 1
+        });
+        expect(true).toBe(false); // Should not reach here
+    } catch (error: any) {
+        expect(error.message).toContain('Too many WHERE conditions');
+    }
+});
+
+test("getByQuery - Enforce maximum values in IN clause", async () => {
+    try {
+        const manyValues = Array.from({ length: 101 }, (_, i) => `value${i}`);
+        await getByQuery({
+            table: 'media_units',
+            where: [{
+                field: 'id',
+                op: 'in',
+                value: manyValues
+            }],
+            limit: 1
+        });
+        expect(true).toBe(false); // Should not reach here
+    } catch (error: any) {
+        expect(error.message).toContain('Too many values in IN clause');
+    }
+});
+
+test("getByQuery - Validate ORDER BY direction", async () => {
+    try {
+        await getByQuery({
+            table: 'media_units',
+            where: [{ field: 'media_id', op: 'equals', value: testMediaId }],
+            order_by: { field: 'at_time', direction: 'INVALID' as any },
+            limit: 1
+        });
+        expect(true).toBe(false); // Should not reach here
+    } catch (error: any) {
+        expect(error.message).toContain('Invalid ORDER BY direction');
+    }
+});
+
 

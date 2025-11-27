@@ -135,6 +135,13 @@ export type ClientUser = Pick<User, 'id' | 'username' | 'role'>;
 
 export type RESTQuery = {
     table: string;
+    joins?: {
+        table: string;
+        on: {
+            left: string;
+            right: string;
+        };
+    }[];
     where?: {
         field: string;
         op: 'equals' | 'in' | 'is_not' | 'like';
