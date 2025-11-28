@@ -20,6 +20,7 @@ import {
     getAllSettings as getAllSettingsDB,
     getAllUsers,
     getByQuery,
+    getMediaUnitById,
     getMediaUnitsByEmbedding,
     getMomentById,
     getUserByUsername as getUserByUsernameDB,
@@ -339,14 +340,30 @@ const server = Bun.serve({
 
                 const results = await getByQuery(query);
                 
+                // Sanitize results to remove sensitive path fields
+                let sanitizedResults = results;
+                if (query.table === "media_units") {
+                    sanitizedResults = results.map((mu: any) => {
+                        const { path, ...rest } = mu;
+                        return rest;
+                    });
+                } else if (query.table === "moments") {
+                    sanitizedResults = results.map((moment: any) => {
+                        const { thumbnail_path, clip_path, ...rest } = moment;
+                        return rest;
+                    });
+                }
+                
                 // Return results with the table name as the key
-                return Response.json({ [query.table]: results });
+                return Response.json({ [query.table]: sanitizedResults });
             },
         },
         "/moments": {
             GET: async () => {
                 const moments = await getAllMoments();
-                return Response.json(moments);
+                // Remove sensitive path fields before sending to frontend
+                const safeMoments = moments.map(({ thumbnail_path, ...rest }) => rest);
+                return Response.json(safeMoments);
             },
         },
         "/moments/:id": {
@@ -358,7 +375,9 @@ const server = Bun.serve({
                     return new Response("Moment not found", { status: 404 });
                 }
 
-                return Response.json(moment);
+                // Remove sensitive path fields before sending to frontend
+                const { thumbnail_path, ...safeMoment } = moment;
+                return Response.json(safeMoment);
             },
         },
         "/moments/:id/thumbnail": {
@@ -409,6 +428,54 @@ const server = Bun.serve({
                 }
             },
         },
+        "/media_units/:id/image": {
+            GET: async ({ params }: { params: { id: string } }) => {
+                const { id } = params;
+
+                // Fetch the media unit from the database
+                const mediaUnit = await getMediaUnitById(id);
+
+                if (!mediaUnit) {
+                    return new Response("Media unit not found", { status: 404 });
+                }
+
+                if (!mediaUnit.path) {
+                    return new Response("No image available", { status: 404 });
+                }
+
+                // Validate that the image path is within FRAMES_DIR
+                const absoluteFilePath = path.resolve(mediaUnit.path);
+                if (!absoluteFilePath.startsWith(FRAMES_DIR)) {
+                    logger.error(
+                        { media_unit_id: id, path: mediaUnit.path },
+                        "Invalid image path"
+                    );
+                    return new Response("Invalid image path", { status: 400 });
+                }
+
+                try {
+                    const file = Bun.file(mediaUnit.path);
+
+                    // Check if file exists
+                    if (!(await file.exists())) {
+                        return new Response("Image file not found", { status: 404 });
+                    }
+
+                    const headers = new Headers();
+                    headers.set("Content-Type", file.type || "image/jpeg");
+                    headers.set("Content-Disposition", "inline");
+                    headers.set("Cache-Control", "public, max-age=31536000"); // Cache for 1 year
+
+                    return new Response(file.stream(), { headers });
+                } catch (error) {
+                    logger.error(
+                        { error, media_unit_id: id },
+                        "Error fetching media unit image"
+                    );
+                    return new Response("Error fetching image", { status: 500 });
+                }
+            },
+        },
 
         "/settings": {
             GET: async (req) => {
@@ -444,42 +511,6 @@ const server = Bun.serve({
                 const users = await getAllUsers();
                 const safeUsers = users.map(({ password_hash, ...rest }) => rest);
                 return Response.json(safeUsers);
-            },
-        },
-        "/files": {
-            GET: async (req) => {
-                const url = new URL(req.url);
-                const file_path = url.searchParams.get("path");
-
-                if (!file_path) {
-                    return new Response("Missing file path", { status: 400 });
-                }
-
-                const absoluteFilePath = path.resolve(file_path);
-
-                if (!absoluteFilePath.startsWith(FRAMES_DIR)) {
-                    return new Response("Invalid file path", { status: 400 });
-                }
-
-                try {
-                    const file = Bun.file(file_path);
-                    const headers = new Headers();
-                    headers.set("Content-Type", file.type);
-
-                    if (file.type.startsWith("image/")) {
-                        headers.set("Content-Disposition", "inline");
-                    } else {
-                        headers.set(
-                            "Content-Disposition",
-                            `attachment; filename="${file.name}"`
-                        );
-                    }
-
-                    return new Response(file.stream(), { headers });
-                } catch (error) {
-                    logger.error({ error }, "Error fetching file");
-                    return new Response("Error fetching file", { status: 500 });
-                }
             },
         },
         "/search": {
@@ -520,7 +551,9 @@ const server = Bun.serve({
                 const media_units = await getMediaUnitsByEmbedding(embedding, {
                     requireDescription: true,
                 });
-                return Response.json({ media_units });
+                // Remove sensitive path fields before sending to frontend
+                const safeMediaUnits = media_units.map(({ path, ...rest }) => rest);
+                return Response.json({ media_units: safeMediaUnits });
             },
         },
         "/agents": {

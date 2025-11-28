@@ -71,6 +71,13 @@ async function startFaultTolerantStream(startArg: ServerToWorkerStreamMessage_Ad
                 state.hearts = 5;
             }, 30000);
             await startStream(startArg, signal);
+            
+            // Is demo video
+            if (startArg.uri.startsWith('https://bucket.zapdoslabs.com/')) {
+                // let it loop again
+                continue;
+            }
+            
             logger.info('Stream ended gracefully, stopping.')
             break;
         } catch (e) {

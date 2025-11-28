@@ -117,6 +117,15 @@ export const create_builders: (opts: ForwardingOpts) => {
               {
                 messages: [
                   {
+                    role: "system",
+                    content: [
+                      {
+                        type: "text",
+                        text: "You are an AI assistant that provides detailed descriptions of images. Answer user question by examining each image carefully.",
+                      },
+                    ],
+                  },
+                  {
                     role: "user",
                     content: [{ type: "text", text: instruction }],
                   },
@@ -160,7 +169,6 @@ export const create_builders: (opts: ForwardingOpts) => {
               media_id: mu.media_id,
               media_unit_id: mu.id,
               at_time: mu.at_time,
-              path: mu.path,
             };
             for (const [id, client] of opts.clients.entries()) {
               client.send(msg);
@@ -222,10 +230,8 @@ export const create_builders: (opts: ForwardingOpts) => {
                 at_time: mu.at_time,
                 agent_id: agent.id,
                 agent_name: agent.name,
-                path: mu.path,
               };
 
-              logger.info({ msg }, "Forwarding agent response to clients");
               for (const [id, client] of opts.clients.entries()) {
                 client.send(msg);
               }

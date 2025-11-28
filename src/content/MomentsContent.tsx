@@ -34,14 +34,20 @@ export default function MomentsContent() {
                                     onClick={() => handleMomentClick(moment)}
                                 >
                                     <div class="aspect-video bg-neu-900 relative">
-                                        <Show when={moment.thumbnail_path} fallback={<div class="absolute inset-0 flex items-center justify-center text-neu-600">No Preview</div>}>
-                                            <img
-                                                src={`/moments/${moment.id}/thumbnail`}
-                                                alt={moment.title || "Moment"}
-                                                class="w-full h-full object-cover"
-                                            />
-                                        </Show>
-
+                                        <img
+                                            src={`/moments/${moment.id}/thumbnail`}
+                                            alt={moment.title || "Moment"}
+                                            class="w-full h-full object-cover"
+                                            onError={(e) => {
+                                                const img = e.target as HTMLImageElement;
+                                                const fallback = img.nextElementSibling as HTMLElement;
+                                                img.style.display = 'none';
+                                                if (fallback) fallback.style.display = 'flex';
+                                            }}
+                                        />
+                                        <div class="absolute inset-0 flex items-center justify-center text-neu-600" style="display: none;">
+                                            No Preview
+                                        </div>
                                     </div>
                                     <div class="p-4">
                                         <h3 class="text-lg font-semibold text-neu-100 mb-1 truncate">

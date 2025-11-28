@@ -97,8 +97,8 @@ export function useAgentBar() {
                                             includeSeconds: true
                                         })}</div>
                                         <div>{card.content}</div>
-                                        <Show when={card.path}>
-                                            <img src={`/files?path=${card.path}`} class="rounded-lg" />
+                                        <Show when={card.media_unit_id}>
+                                            <img src={`/media_units/${card.media_unit_id}/image`} class="rounded-lg" />
                                         </Show>
                                     </div>
                                 }}

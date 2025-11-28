@@ -9,7 +9,7 @@ import AgentPlusSVG from '~/assets/icons/AgentPlus.svg';
 const AGENT_TEMPLATES = [
     {
         name: 'Fall Detector',
-        instruction: 'Was there an incident? Check for possible fall patterns or if anyone has fallen to ensure worker safety.',
+        instruction: 'Was there an incident? Check if anyone has fallen to ensure worker safety. Is there a potentially dangerous situation (people near edges, not wearing safety gear, etc)?',
     },
     {
         name: 'Security Monitor',

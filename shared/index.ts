@@ -11,7 +11,6 @@ export type AgentCard = {
     at_time: number;
     agent_id?: string;
     agent_name?: string;
-    path?: string;
     type?: string;
 }
 

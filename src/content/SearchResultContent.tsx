@@ -103,7 +103,7 @@ export default function SearchResultContent() {
                                         <div class="font-semibold">{name()}</div>
                                         <div class="text-neu-400 text-sm">{format(mu.at_time, 'PPpp')}</div>
                                         <div class="py-1">{mu.description}</div>
-                                        <img src={`/files?path=${mu.path}`} class="rounded-lg" />
+                                        <img src={`/media_units/${mu.id}/image`} class="rounded-lg" />
                                     </div>
                                 }}
                             </For>
