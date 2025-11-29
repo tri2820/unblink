@@ -140,9 +140,9 @@ export default function SideBar() {
 
             {/* Head */}
             <div class="mt-4 flex items-center space-x-3 mx-4 mb-8">
-                <img src={ZapdosLabsSVG} class="w-18 h-18" />
+                <img src={logoSVG} class="w-18 h-18" />
                 <div class="flex-1 font-nunito font-medium text-white text-3xl mt-2 leading-none">
-                    Zapdos Labs
+                    Unblink
                 </div>
             </div>
 

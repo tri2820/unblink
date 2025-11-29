@@ -48,6 +48,7 @@ export type Builder = {
   }) => void | Promise<void>;
 };
 
+
 export const create_builders: (opts: ForwardingOpts) => {
   [builder_id: string]: Builder;
 } = (opts) => {
@@ -194,12 +195,12 @@ export const create_builders: (opts: ForwardingOpts) => {
 
           logger.info({ media_unit_id, agents }, `indexing: Retrieved custom agents from database`);
           for (const agent of agents) {
+            
             logger.info({ media_unit_id, agent_id: agent.id }, 'indexing: Creating VLM job for custom agent');
             const agentJob = createVlmJob(agent.instruction);
             
             agentJob.then(async (output) => {
-              logger.info({ media_unit_id, agent_id: agent.id }, 'indexing: Processing VLM job output for custom agent');
-              const content = cleanResponse(output.response);
+              let content = cleanResponse(output.response);
 
               const mu = await getMediaUnitById(media_unit_id);
               if (!mu) {

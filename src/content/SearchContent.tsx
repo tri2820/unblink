@@ -7,9 +7,9 @@ export default function SearchContent() {
 
       <div class="mt-[40vh]  space-y-8">
         <div class="flex items-center space-x-2 justify-center relative">
-          {/* <img src={catPNG} class="h-24 absolute left-0 bottom-0 -translate-x-full" /> */}
+          <img src={catPNG} class="h-24 absolute left-0 bottom-0 -translate-x-full" />
           <div class="flex-1 font-nunito font-medium text-white text-7xl leading-none px-4">
-            Zapdos Labs
+            Unblink
           </div>
         </div>
         <div class="relative z-40 ">
