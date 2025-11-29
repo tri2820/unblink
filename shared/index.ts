@@ -132,7 +132,15 @@ export type ServerToWorkerStreamMessage =
 
 export type ClientUser = Pick<User, 'id' | 'username' | 'role'>;
 
-export type RESTQuery = {
+export type RESTWhereField = {
+    field: string;
+    op: 'equals' | 'in' | 'is_not' | 'like' | 'gt' | 'lt' | 'gte' | 'lte' | 'json_extract';
+    value: any;
+    json_path?: string;
+};
+
+export type RESTSelect = {
+    type?: 'select';
     table: string;
     joins?: {
         table: string;
@@ -141,18 +149,35 @@ export type RESTQuery = {
             right: string;
         };
     }[];
-    where?: {
-        field: string;
-        op: 'equals' | 'in' | 'is_not' | 'like';
-        value: any;
-    }[];
-    select?: string[];
+    where?: RESTWhereField[];
+    select?: (string | {value: string, alias: string})[];
     limit?: number;
     order_by?: {
         field: string;
         direction: 'ASC' | 'DESC';
     };
-}
+};
+
+export type RESTInsert = {
+    type: 'insert';
+    table: string;
+    values: Record<string, any> | Record<string, any>[];
+};
+
+export type RESTUpdate = {
+    type: 'update';
+    table: string;
+    where: RESTWhereField[];
+    values: Record<string, any>;
+};
+
+export type RESTDelete = {
+    type: 'delete';
+    table: string;
+    where: RESTWhereField[];
+};
+
+export type RESTQuery = RESTSelect | RESTInsert | RESTUpdate | RESTDelete;
 
 export type ServerEphemeralState = {
     remote_worker_jobs_cont: Map<string, (output: any) => void>

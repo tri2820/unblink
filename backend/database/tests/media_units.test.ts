@@ -146,7 +146,7 @@ test("Get media units by embedding similarity", async () => {
     // Verify we can find the perfect match (mediaUnitId1)
     const perfectMatch = results.find(r => r.id === mediaUnitId1);
     expect(perfectMatch).toBeDefined();
-    expect(perfectMatch!.similarity).toBeCloseTo(0, 3); // Perfect match has similarity ~0
+    expect(perfectMatch!.distance).toBeCloseTo(0, 3); // Perfect match has distance ~0
 
     // Clean up
     await deleteMediaUnit(mediaUnitId1);

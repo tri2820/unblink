@@ -1,15 +1,15 @@
 import { expect, test, beforeAll, afterAll } from "bun:test";
-import { 
-    getByQuery, 
-    createMediaUnit, 
-    deleteMediaUnit, 
-    createMedia, 
+import {
+    createMediaUnit,
+    deleteMediaUnit,
+    createMedia,
     deleteMedia,
     createAgent,
     deleteAgent,
     createAgentResponse,
     deleteAgentResponse
 } from '../utils';
+import { executeREST } from '../rest';
 import { getDb, closeDb } from '../database';
 import type { MediaUnit, Agent, AgentResponse } from '~/shared/database';
 
@@ -56,16 +56,16 @@ afterAll(async () => {
     await closeDb();
 });
 
-test("getByQuery - Default limit (50)", async () => {
-    const results = await getByQuery({
+test("executeREST - Default limit (50)", async () => {
+    const results = await executeREST({
         table: 'media_units',
         where: [{ field: 'media_id', op: 'equals', value: testMediaId }]
     });
     expect(results.length).toBe(50);
 });
 
-test("getByQuery - Explicit limit (10)", async () => {
-    const results = await getByQuery({
+test("executeREST - Explicit limit (10)", async () => {
+    const results = await executeREST({
         table: 'media_units',
         where: [{ field: 'media_id', op: 'equals', value: testMediaId }],
         limit: 10
@@ -73,7 +73,7 @@ test("getByQuery - Explicit limit (10)", async () => {
     expect(results.length).toBe(10);
 });
 
-test("getByQuery - Max limit enforcement (request 300, get max)", async () => {
+test("executeREST - Max limit enforcement (request 300, get max)", async () => {
     // We only have 60 items, so we can't verify it returns 200.
     // But we can verify it returns all 60 when we ask for 300, 
     // and we can verify the SQL limit clause if we could inspect it, but we can't easily here.
@@ -83,7 +83,7 @@ test("getByQuery - Max limit enforcement (request 300, get max)", async () => {
     // Let's just verify it returns 60 for now, which confirms it doesn't crash or return 0.
     // And we can verify the default limit worked (50 vs 60 available).
 
-    const results = await getByQuery({
+    const results = await executeREST({
         table: 'media_units',
         where: [{ field: 'media_id', op: 'equals', value: testMediaId }],
         limit: 300
@@ -91,8 +91,8 @@ test("getByQuery - Max limit enforcement (request 300, get max)", async () => {
     expect(results.length).toBe(60);
 });
 
-test("getByQuery - Select specific fields", async () => {
-    const results = await getByQuery({
+test("executeREST - Select specific fields", async () => {
+    const results = await executeREST({
         table: 'media_units',
         where: [{ field: 'media_id', op: 'equals', value: testMediaId }],
         limit: 1,
@@ -110,8 +110,8 @@ test("getByQuery - Select specific fields", async () => {
     expect(Object.keys(item as object)).not.toContain('path');
 });
 
-test("getByQuery - Order by at_time DESC", async () => {
-    const results = await getByQuery({
+test("executeREST - Order by at_time DESC", async () => {
+    const results = await executeREST({
         table: 'media_units',
         where: [{ field: 'media_id', op: 'equals', value: testMediaId }],
         limit: 10,
@@ -125,8 +125,8 @@ test("getByQuery - Order by at_time DESC", async () => {
     }
 });
 
-test("getByQuery - Order by description ASC", async () => {
-    const results = await getByQuery({
+test("executeREST - Order by description ASC", async () => {
+    const results = await executeREST({
         table: 'media_units',
         where: [{ field: 'media_id', op: 'equals', value: testMediaId }],
         limit: 10,
@@ -143,8 +143,8 @@ test("getByQuery - Order by description ASC", async () => {
     }
 });
 
-test("getByQuery - Order by with select fields", async () => {
-    const results = await getByQuery({
+test("executeREST - Order by with select fields", async () => {
+    const results = await executeREST({
         table: 'media_units',
         where: [{ field: 'media_id', op: 'equals', value: testMediaId }],
         limit: 5,
@@ -167,7 +167,7 @@ test("getByQuery - Order by with select fields", async () => {
     }
 });
 
-test("getByQuery - is_not NULL (filter for non-null descriptions)", async () => {
+test("executeREST - is_not NULL (filter for non-null descriptions)", async () => {
     // First, create a media unit without a description
     const noDescId = crypto.randomUUID();
     await createMediaUnit({
@@ -181,7 +181,7 @@ test("getByQuery - is_not NULL (filter for non-null descriptions)", async () => 
     createdMediaUnitIds.push(noDescId);
 
     // Query for items with non-null descriptions
-    const results = await getByQuery({
+    const results = await executeREST({
         table: 'media_units',
         where: [
             { field: 'media_id', op: 'equals', value: testMediaId },
@@ -198,7 +198,7 @@ test("getByQuery - is_not NULL (filter for non-null descriptions)", async () => 
     }
 });
 
-test("getByQuery - in operation (multiple media_ids)", async () => {
+test("executeREST - in operation (multiple media_ids)", async () => {
     // Create another test media
     const testMediaId2 = crypto.randomUUID();
     await createMedia({
@@ -228,7 +228,7 @@ test("getByQuery - in operation (multiple media_ids)", async () => {
     }
 
     // Query for items from both media sources
-    const results = await getByQuery({
+    const results = await executeREST({
         table: 'media_units',
         where: [
             { field: 'media_id', op: 'in', value: [testMediaId, testMediaId2] },
@@ -249,7 +249,7 @@ test("getByQuery - in operation (multiple media_ids)", async () => {
     await deleteMedia(testMediaId2);
 });
 
-test("getByQuery - Join agent_responses with media_units and agents", async () => {
+test("executeREST - Join agent_responses with media_units and agents", async () => {
     const agentId = crypto.randomUUID();
     const agent: Agent = {
         id: agentId,
@@ -261,7 +261,7 @@ test("getByQuery - Join agent_responses with media_units and agents", async () =
     const responseId = crypto.randomUUID();
     const testMediaUnitId = createdMediaUnitIds[0];
     expect(testMediaUnitId).toBeDefined();
-    
+
     const agentResponse: AgentResponse = {
         id: responseId,
         agent_id: agentId,
@@ -271,7 +271,7 @@ test("getByQuery - Join agent_responses with media_units and agents", async () =
     };
     await createAgentResponse(agentResponse);
 
-    const results = await getByQuery({
+    const results = await executeREST({
         table: 'agent_responses',
         joins: [
             {
@@ -298,7 +298,7 @@ test("getByQuery - Join agent_responses with media_units and agents", async () =
     });
 
     expect(results.length).toBe(1);
-    
+
     const result = results[0];
     expect(result).toBeDefined();
     expect(result.content).toBe('Test agent response content');
@@ -310,7 +310,7 @@ test("getByQuery - Join agent_responses with media_units and agents", async () =
     await deleteAgent(agentId);
 });
 
-test("getByQuery - Multiple joins with order by", async () => {
+test("executeREST - Multiple joins with order by", async () => {
     const agentId = crypto.randomUUID();
     const agent: Agent = {
         id: agentId,
@@ -322,14 +322,14 @@ test("getByQuery - Multiple joins with order by", async () => {
     const responseIds: string[] = [];
     const baseTime = Date.now();
     const numResponses = 3;
-    
+
     for (let i = 0; i < numResponses; i++) {
         const responseId = crypto.randomUUID();
         responseIds.push(responseId);
-        
+
         const mediaUnitId = createdMediaUnitIds[i];
         expect(mediaUnitId).toBeDefined();
-        
+
         const agentResponse: AgentResponse = {
             id: responseId,
             agent_id: agentId,
@@ -340,7 +340,7 @@ test("getByQuery - Multiple joins with order by", async () => {
         await createAgentResponse(agentResponse);
     }
 
-    const results = await getByQuery({
+    const results = await executeREST({
         table: 'agent_responses',
         joins: [
             {
@@ -366,17 +366,17 @@ test("getByQuery - Multiple joins with order by", async () => {
     });
 
     expect(results.length).toBe(numResponses);
-    
+
     // Verify descending order by checking timestamps
     for (let i = 0; i < results.length - 1; i++) {
         expect(results[i].created_at).toBeGreaterThan(results[i + 1].created_at);
     }
-    
+
     // Verify content matches expected order
     expect(results[0].content).toBe('Response 2');
     expect(results[1].content).toBe('Response 1');
     expect(results[2].content).toBe('Response 0');
-    
+
     // Verify all results have agent name from join
     for (const result of results) {
         expect(result.agent_name).toBe('Multi Join Agent');
@@ -389,9 +389,9 @@ test("getByQuery - Multiple joins with order by", async () => {
 });
 
 // Security Tests
-test("getByQuery - Reject invalid table name", async () => {
+test("executeREST - Reject invalid table name", async () => {
     try {
-        await getByQuery({
+        await executeREST({
             table: 'users; DROP TABLE media_units;--',
             where: [{ field: 'id', op: 'equals', value: 'test' }]
         });
@@ -401,9 +401,9 @@ test("getByQuery - Reject invalid table name", async () => {
     }
 });
 
-test("getByQuery - Reject invalid field with SQL injection attempt", async () => {
+test("executeREST - Reject invalid field with SQL injection attempt", async () => {
     try {
-        await getByQuery({
+        await executeREST({
             table: 'media_units',
             where: [{ field: 'id; DROP TABLE media_units;--', op: 'equals', value: 'test' }]
         });
@@ -413,9 +413,9 @@ test("getByQuery - Reject invalid field with SQL injection attempt", async () =>
     }
 });
 
-test("getByQuery - Reject invalid column name in select", async () => {
+test("executeREST - Reject invalid column name in select", async () => {
     try {
-        await getByQuery({
+        await executeREST({
             table: 'media_units',
             select: ['id', 'nonexistent_column'],
             where: [{ field: 'media_id', op: 'equals', value: testMediaId }],
@@ -427,9 +427,9 @@ test("getByQuery - Reject invalid column name in select", async () => {
     }
 });
 
-test("getByQuery - Reject invalid table in join", async () => {
+test("executeREST - Reject invalid table in join", async () => {
     try {
-        await getByQuery({
+        await executeREST({
             table: 'media_units',
             joins: [{
                 table: 'fake_table',
@@ -444,9 +444,9 @@ test("getByQuery - Reject invalid table in join", async () => {
     }
 });
 
-test("getByQuery - Reject invalid join column", async () => {
+test("executeREST - Reject invalid join column", async () => {
     try {
-        await getByQuery({
+        await executeREST({
             table: 'agent_responses',
             joins: [{
                 table: 'agents',
@@ -461,10 +461,10 @@ test("getByQuery - Reject invalid join column", async () => {
     }
 });
 
-test("getByQuery - Enforce maximum select fields", async () => {
+test("executeREST - Enforce maximum select fields", async () => {
     try {
         const manyFields = Array.from({ length: 51 }, (_, i) => `id`);
-        await getByQuery({
+        await executeREST({
             table: 'media_units',
             select: manyFields,
             where: [{ field: 'media_id', op: 'equals', value: testMediaId }],
@@ -476,13 +476,13 @@ test("getByQuery - Enforce maximum select fields", async () => {
     }
 });
 
-test("getByQuery - Enforce maximum joins", async () => {
+test("executeREST - Enforce maximum joins", async () => {
     try {
         const manyJoins = Array.from({ length: 11 }, () => ({
             table: 'agents',
             on: { left: 'id', right: 'id' }
         }));
-        await getByQuery({
+        await executeREST({
             table: 'media_units',
             joins: manyJoins,
             limit: 1
@@ -493,14 +493,14 @@ test("getByQuery - Enforce maximum joins", async () => {
     }
 });
 
-test("getByQuery - Enforce maximum WHERE conditions", async () => {
+test("executeREST - Enforce maximum WHERE conditions", async () => {
     try {
         const manyConditions = Array.from({ length: 21 }, () => ({
             field: 'id',
             op: 'equals' as const,
             value: 'test'
         }));
-        await getByQuery({
+        await executeREST({
             table: 'media_units',
             where: manyConditions,
             limit: 1
@@ -511,10 +511,10 @@ test("getByQuery - Enforce maximum WHERE conditions", async () => {
     }
 });
 
-test("getByQuery - Enforce maximum values in IN clause", async () => {
+test("executeREST - Enforce maximum values in IN clause", async () => {
     try {
         const manyValues = Array.from({ length: 101 }, (_, i) => `value${i}`);
-        await getByQuery({
+        await executeREST({
             table: 'media_units',
             where: [{
                 field: 'id',
@@ -529,9 +529,9 @@ test("getByQuery - Enforce maximum values in IN clause", async () => {
     }
 });
 
-test("getByQuery - Validate ORDER BY direction", async () => {
+test("executeREST - Validate ORDER BY direction", async () => {
     try {
-        await getByQuery({
+        await executeREST({
             table: 'media_units',
             where: [{ field: 'media_id', op: 'equals', value: testMediaId }],
             order_by: { field: 'at_time', direction: 'INVALID' as any },

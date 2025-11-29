@@ -19,7 +19,6 @@ import {
     getAllMoments,
     getAllSettings as getAllSettingsDB,
     getAllUsers,
-    getByQuery,
     getMediaUnitById,
     getMediaUnitsByEmbedding,
     getMomentById,
@@ -27,6 +26,7 @@ import {
     setSetting as setSettingDB,
     updateMedia,
 } from "./backend/database/utils";
+import { executeREST } from './backend/database/rest';
 import { createForwardFunction } from "./backend/forward";
 import { logger } from "./backend/logger";
 import { check_version } from "./backend/startup/check_version";
@@ -90,7 +90,7 @@ export const createRequestBuilder = (): RequestBuilder => {
         type: "worker_request",
         jobs: [],
         resources: [],
-    };    
+    };
 
     const add_resource = (res: Resource) => {
         req.resources = req.resources || [];
@@ -331,31 +331,36 @@ const server = Bun.serve({
                 }
 
                 const query: RESTQuery = body.query;
-                
+
                 // Whitelist supported tables
                 const supportedTables = ["media_units", "agent_responses", "agents", "moments"];
                 if (!supportedTables.includes(query.table)) {
                     return new Response("Invalid table in query", { status: 400 });
                 }
 
-                const results = await getByQuery(query);
-                
-                // Sanitize results to remove sensitive path fields
-                let sanitizedResults = results;
-                if (query.table === "media_units") {
-                    sanitizedResults = results.map((mu: any) => {
-                        const { path, ...rest } = mu;
-                        return rest;
-                    });
-                } else if (query.table === "moments") {
-                    sanitizedResults = results.map((moment: any) => {
-                        const { thumbnail_path, clip_path, ...rest } = moment;
-                        return rest;
-                    });
+                const results = await executeREST(query);
+
+                if (Array.isArray(results)) {
+                    // Sanitize results to remove sensitive path fields
+                    let sanitizedResults = results;
+                    if (query.table === "media_units") {
+                        sanitizedResults = results.map((mu: any) => {
+                            const { path, ...rest } = mu;
+                            return rest;
+                        });
+                    } else if (query.table === "moments") {
+                        sanitizedResults = results.map((moment: any) => {
+                            const { thumbnail_path, clip_path, ...rest } = moment;
+                            return rest;
+                        });
+                    }
+
+                    // Return results with the table name as the key
+                    return Response.json({ [query.table]: sanitizedResults });
+                } else {
+                    // Write operation successful
+                    return Response.json({ success: true });
                 }
-                
-                // Return results with the table name as the key
-                return Response.json({ [query.table]: sanitizedResults });
             },
         },
         "/moments": {

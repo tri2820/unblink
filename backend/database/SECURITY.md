@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `getByQuery` function implements multiple layers of security to prevent SQL injection and other attacks.
+The `executeREST` function implements multiple layers of security to prevent SQL injection and other attacks.
 
 ## Security Measures
 
@@ -67,7 +67,7 @@ Schema is cached in memory for performance. Use `clearSchemaCache()` to force a 
 ### SQL Injection via Table Name
 ```typescript
 // ❌ BLOCKED
-await getByQuery({
+await executeREST({
     table: 'media_units; DROP TABLE media_units;--'
 })
 // Error: Invalid table
@@ -76,7 +76,7 @@ await getByQuery({
 ### SQL Injection via Field Name
 ```typescript
 // ❌ BLOCKED
-await getByQuery({
+await executeREST({
     table: 'media_units',
     where: [{ field: 'id\' OR \'1\'=\'1', op: 'equals', value: 'test' }]
 })
@@ -86,7 +86,7 @@ await getByQuery({
 ### Column Enumeration
 ```typescript
 // ❌ BLOCKED
-await getByQuery({
+await executeREST({
     table: 'media_units',
     select: ['id', 'password', 'secret_key']
 })
@@ -96,7 +96,7 @@ await getByQuery({
 ### Resource Exhaustion
 ```typescript
 // ❌ BLOCKED
-await getByQuery({
+await executeREST({
     table: 'media_units',
     select: Array(1000).fill('id')
 })
