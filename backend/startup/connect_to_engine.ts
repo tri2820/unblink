@@ -1,6 +1,6 @@
 import type { ServerWebSocket } from "bun";
 
-import type { ServerEphemeralState } from "~/shared";
+import type { ServerEphemeralState } from "../../index";
 import type { WebhookMessage } from "~/shared/alert";
 import { Conn } from "~/shared/Conn";
 import type { EngineToServer, RemoteJob, ServerRegistrationMessage, WorkerRequest } from "~/shared/engine";

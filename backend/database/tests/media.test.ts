@@ -35,7 +35,7 @@ test("Get media by ID", async () => {
         id,
         name: 'Test Media for ID',
         uri: 'rtsp://test.com/id',
-        labels: ['Test'],
+        labels: [],
         updated_at: Date.now(),
         save_to_disk: 0,
         save_location: null
@@ -43,6 +43,7 @@ test("Get media by ID", async () => {
     const media = await getMediaById(id);
     expect(media).toBeDefined();
     expect(media?.id).toBe(id);
+    expect(media?.labels).toEqual([]);
     await deleteMedia(id);
 });
 
@@ -58,7 +59,7 @@ test("Create a new media entry", async () => {
         id,
         name: 'New Test Camera',
         uri: 'rtsp://example.com/test',
-        labels: ['Test', 'New'],
+        labels: [],
         updated_at: Date.now(),
         save_to_disk: 1,
         save_location: '/test/recordings'
@@ -66,6 +67,7 @@ test("Create a new media entry", async () => {
     const media = await getMediaById(id);
     expect(media).toBeDefined();
     expect(media?.name).toBe('New Test Camera');
+    expect(media?.labels).toEqual([]);
     await deleteMedia(id);
 });
 
@@ -87,6 +89,7 @@ test("Update the media", async () => {
     const updatedMedia = await getMediaById(id);
     expect(updatedMedia?.name).toBe('Updated Media');
     expect(updatedMedia?.save_to_disk).toBe(0);
+    expect(updatedMedia?.labels).toEqual(['Old']);
     await deleteMedia(id);
 });
 
@@ -96,7 +99,7 @@ test("Delete media and verify", async () => {
         id,
         name: 'Test Media for Delete',
         uri: 'rtsp://test.com/delete',
-        labels: ['Test', 'Delete'],
+        labels: [],
         updated_at: Date.now(),
         save_to_disk: 0,
         save_location: null

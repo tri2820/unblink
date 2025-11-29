@@ -1,7 +1,7 @@
 
 import { createEffect, onMount, untrack, type ValidComponent } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import type { FrameStatsMessage, ServerEphemeralState, RESTQuery, MediaUnit } from '~/shared';
+import type { FrameStatsMessage, RESTQuery, MediaUnit } from '~/shared';
 import ArkToast from './ark/ArkToast';
 import Authed from './Authed';
 import HomeContent from './content/HomeContent';
@@ -23,13 +23,13 @@ export default function App() {
     onMount(async () => {
         // fetch server's global states
         try {
-            const response = await fetch('/state');
-            const data: ServerEphemeralState = await response.json();
-            console.log('Fetched global state from server:', data);
+            const response = await fetch('/frame-stats');
+            const data: FrameStatsMessage[] = await response.json();
+            console.log('Fetched frame stats messages from server:', data);
 
             // Group messages by media_id
             const messagesByStream: Record<string, FrameStatsMessage[]> = {};
-            for (const msg of data.frame_stats_messages) {
+            for (const msg of data) {
                 if (!messagesByStream[msg.media_id]) {
                     messagesByStream[msg.media_id] = [];
                 }
@@ -44,7 +44,7 @@ export default function App() {
             setStatsMessages(messagesByStream);
             console.log('messagesByStream', messagesByStream)
         } catch (error) {
-            console.error('Error fetching global state from server:', error);
+            console.error('Error fetching frame stats messages from server:', error);
         }
     })
 

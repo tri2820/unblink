@@ -43,8 +43,30 @@ import homepage from "./index.html";
 import type {
     ClientToServerMessage,
     RESTQuery,
-    ServerEphemeralState
 } from "./shared";
+
+type ServerEphemeralState = {
+    remote_worker_jobs_cont: Map<string, (output: any) => void>
+    frame_stats_messages: import("./shared").FrameStatsMessage[];
+    stream_stats_map: Map<string, {
+        last10: number[];
+        last100: number[];
+        deviationState: {
+            active: boolean;
+            startTimestamp: number;
+            startFrameId: string;
+            frameIds: string[];
+            peakDeviation: number;
+            consecutiveAboveCount: number;
+            consecutiveBelowCount: number;
+        };
+    }>;
+    active_moments: Set<string>;
+    moment_frames: Map<string, { id: string, at_time: number, data: Uint8Array }[]>;
+    current_moment_ids: Map<string, string>; // media_id -> moment_id for active moments
+};
+
+export type { ServerEphemeralState };
 import type { RemoteJob, Resource, WorkerRequest } from "./shared/engine";
 
 // ... (rest of imports)
@@ -593,9 +615,9 @@ const server = Bun.serve({
                 return Response.json({ success: true });
             },
         },
-        "/state": {
+        "/frame-stats": {
             GET: async () => {
-                return Response.json(state);
+                return Response.json(state.frame_stats_messages);
             },
         },
     },

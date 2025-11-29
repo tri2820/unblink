@@ -2,9 +2,9 @@ import path from "path";
 import type {
   FrameStatsMessage,
   SegmentationMessage,
-  ServerEphemeralState,
   ServerToClientMessage,
 } from "~/shared";
+import type { ServerEphemeralState } from "../index";
 import {
   type WorkerInput__Embedding,
   type WorkerInput__MotionEnergy,

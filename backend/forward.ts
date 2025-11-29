@@ -6,7 +6,7 @@ import type { WebhookMessage } from "~/shared/alert";
 import { updateMoment } from "./database/utils";
 import type { WsClient } from "./WsClient";
 
-import type { ServerEphemeralState } from "~/shared";
+import type { ServerEphemeralState } from "../index";
 import { createRequestBuilder } from "..";
 import { create_builders, updateMomentFrames } from "./forward_utils";
 import { logger } from "./logger";

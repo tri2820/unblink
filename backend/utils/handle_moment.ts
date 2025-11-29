@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import path from "path";
 import { createRequestBuilder } from "~/index";
-import type { ServerEphemeralState } from "~/shared";
+import type { ServerEphemeralState } from "../../index";
 import type { Resource, WorkerInput__Caption, WorkerInput__Llm, WorkerInput__Vlm, WorkerOutput__Caption, WorkerOutput__Llm, WorkerOutput__Vlm } from "~/shared/engine";
 import { FRAMES_DIR } from "../appdir";
 import { createMoment, updateMoment } from "../database/utils";

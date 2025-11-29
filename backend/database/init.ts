@@ -10,7 +10,6 @@ export async function initDatabase(client: Database) {
     const getTablesStmt = client.prepare("SELECT name FROM sqlite_schema WHERE type='table';");
     const existingTableRows = await getTablesStmt.all() as { name: string }[];
     const existingTablesArr = existingTableRows.map(row => row.name)
-    logger.info({ tables: existingTablesArr }, "Existing tables:");
     const existingTables = new Set(existingTablesArr);
 
     // Create 'media_units' table
