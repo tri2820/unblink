@@ -46,7 +46,7 @@ export async function initDatabase(client: Database) {
         logger.info("Table 'media' created.");
 
         // Run onboarding only when table is newly created to avoid schema timing issues
-        await onboardMedia(client);
+        // Moved to end
     }
 
     // Create 'settings' table
@@ -60,7 +60,7 @@ export async function initDatabase(client: Database) {
         logger.info("Table 'settings' created.");
 
         // Run onboarding only when table is newly created to avoid schema timing issues
-        await onboardSettings(client);
+        // Moved to end
     }
 
     // Create 'secrets' table
@@ -145,6 +145,18 @@ export async function initDatabase(client: Database) {
             );
         `);
         logger.info("Table 'agent_responses' created.");
+    }
+
+    // Run onboarding after all tables are created
+    // Check if media table is empty
+    const mediaCount = await client.prepare('SELECT COUNT(*) as count FROM media').get() as { count: number };
+    if (mediaCount.count === 0) {
+        await onboardMedia(client);
+    }
+    // Check if settings table is empty
+    const settingsCount = await client.prepare('SELECT COUNT(*) as count FROM settings').get() as { count: number };
+    if (settingsCount.count === 0) {
+        await onboardSettings(client);
     }
 }
 
