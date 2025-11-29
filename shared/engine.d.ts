@@ -71,6 +71,19 @@ export type WorkerOutput__Embedding = {
     embedding: number[]; // Vector of size 8192 (Jina model)
 }
 
+// Rzen Embedding Worker
+export type WorkerInput__Rzen = {
+    text?: string;
+    image?: ResourceRef;
+    instruction?: string;
+}
+
+export type WorkerOutput__Rzen = {
+    id: string;
+    embedding: number[]; // Vector of size 3584 (RzenEmbed model)
+}
+
+
 // LLM Worker
 export type WorkerInput__Llm = {
     messages: Array<{

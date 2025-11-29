@@ -1,5 +1,5 @@
 import type { RESTWhereField } from '~/shared';
-import type { Agent, AgentResponse, Media, MediaUnit, Moment, Secret, Session, Setting, User } from '~/shared/database';
+import type { Agent, AgentResponse, Embedding, Media, MediaUnit, Moment, Secret, Session, Setting, User } from '~/shared/database';
 
 
 import { executeREST } from './rest';
@@ -625,6 +625,80 @@ export async function deleteAgentResponse(id: string): Promise<void> {
     await executeREST({
         type: 'delete',
         table: 'agent_responses',
+        where: [{ field: 'id', op: 'equals', value: id }]
+    });
+}
+
+// Embedding utilities
+export async function createEmbedding(embedding: Embedding): Promise<void> {
+    await executeREST({
+        type: 'insert',
+        table: 'embeddings',
+        values: {
+            id: embedding.id,
+            value: embedding.value,
+            type: embedding.type,
+            ref_id: embedding.ref_id
+        },
+        cast: { value: { type: 'embedding' } }
+    });
+}
+
+export async function getEmbeddingById(id: string): Promise<Embedding | undefined> {
+    return await executeREST({
+        table: 'embeddings',
+        where: [{ field: 'id', op: 'equals', value: id }],
+        expect: { is: 'single', value_when_no_item: undefined },
+        cast: { value: { type: 'embedding' } }
+    });
+}
+
+export async function getEmbeddingsByType(type: string): Promise<Embedding[]> {
+    const rows = await executeREST({
+        table: 'embeddings',
+        where: [{ field: 'type', op: 'equals', value: type }],
+        limit: 100,
+        cast: { value: { type: 'embedding' } }
+    });
+    return rows as Embedding[];
+}
+
+export async function getEmbeddingsByRefId(refId: string): Promise<Embedding[]> {
+    const rows = await executeREST({
+        table: 'embeddings',
+        where: [{ field: 'ref_id', op: 'equals', value: refId }],
+        limit: 100,
+        cast: { value: { type: 'embedding' } }
+    });
+    return rows as Embedding[];
+}
+
+export async function getAllEmbeddings(): Promise<Embedding[]> {
+    const rows = await executeREST({
+        table: 'embeddings',
+        limit: 1000,
+        cast: { value: { type: 'embedding' } }
+    });
+    return rows as Embedding[];
+}
+
+export async function updateEmbedding(id: string, updates: Partial<Omit<Embedding, 'id'>>): Promise<void> {
+    const fields = Object.keys(updates);
+    if (fields.length === 0) return;
+
+    await executeREST({
+        type: 'update',
+        table: 'embeddings',
+        where: [{ field: 'id', op: 'equals', value: id }],
+        values: updates,
+        cast: updates.value ? { value: { type: 'embedding' } } : undefined
+    });
+}
+
+export async function deleteEmbedding(id: string): Promise<void> {
+    await executeREST({
+        type: 'delete',
+        table: 'embeddings',
         where: [{ field: 'id', op: 'equals', value: id }]
     });
 }

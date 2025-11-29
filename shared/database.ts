@@ -70,3 +70,10 @@ export interface Moment {
     clip_path?: string | null;
     thumbnail_path?: string | null;
 }
+
+export interface Embedding {
+    id: string;
+    value: Uint8Array; // Stored as BLOB
+    type: string;
+    ref_id: string;
+}

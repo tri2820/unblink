@@ -146,6 +146,19 @@ export async function initDatabase(client: Database) {
         logger.info("Table 'agent_responses' created.");
     }
 
+    // Create 'embeddings' table
+    if (!existingTables.has('embeddings')) {
+        await client.exec(`
+            CREATE TABLE embeddings (
+                id TEXT PRIMARY KEY,
+                value BLOB NOT NULL,
+                type TEXT NOT NULL,
+                ref_id TEXT NOT NULL
+            );
+        `);
+        logger.info("Table 'embeddings' created.");
+    }
+
     // Run onboarding after all tables are created
     // Check if media table is empty
     const mediaCount = await client.prepare('SELECT COUNT(*) as count FROM media').get() as { count: number };

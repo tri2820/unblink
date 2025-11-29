@@ -8,10 +8,12 @@ import type { ServerEphemeralState } from "../index";
 import {
   type WorkerInput__Embedding,
   type WorkerInput__MotionEnergy,
+  type WorkerInput__Rzen,
   type WorkerInput__Segmentation,
   type WorkerInput__Vlm,
   type WorkerOutput__Embedding,
   type WorkerOutput__MotionEnergy,
+  type WorkerOutput__Rzen,
   type WorkerOutput__Segmentation,
   type WorkerOutput__Vlm,
   type WorkerType,
@@ -53,229 +55,229 @@ export const create_builders: (opts: ForwardingOpts) => {
   [builder_id: string]: Builder;
 } = (opts) => {
   return {
-    indexing: {
-      worker_types: ["vlm", "embedding"],
-      interval: 3000,
-      should_run({ in_moment, last_time_run }) {
-        if (in_moment) return true;
-        const now = Date.now();
+    // indexing: {
+    //   worker_types: ["vlm"],
+    //   interval: 3000,
+    //   should_run({ in_moment, last_time_run }) {
+    //     if (in_moment) return true;
+    //     const now = Date.now();
 
-        // Ocassionally run every minute
-        return now - last_time_run > 60000;
-      },
-      async write(media_id: string, media_unit_id: string, data: Uint8Array) {
-        // Write data to file
-        const _path = path.join(FRAMES_DIR, `${media_unit_id}.jpg`);
-        await Bun.write(_path, data);
+    //     // Ocassionally run every minute
+    //     return now - last_time_run > 60000;
+    //   },
+    //   async write(media_id: string, media_unit_id: string, data: Uint8Array) {
+    //     // Write data to file
+    //     const _path = path.join(FRAMES_DIR, `${media_unit_id}.jpg`);
+    //     await Bun.write(_path, data);
 
-        // Store in database
-        const mu = {
-          id: media_unit_id,
-          type: "frame",
-          at_time: Date.now(), // Using timestamp instead of Date object
-          description: null,
-          embedding: null,
-          media_id,
-          path: _path,
-        };
-        await createMediaUnit(mu);
-      },
+    //     // Store in database
+    //     const mu = {
+    //       id: media_unit_id,
+    //       type: "frame",
+    //       at_time: Date.now(), // Using timestamp instead of Date object
+    //       description: null,
+    //       embedding: null,
+    //       media_id,
+    //       path: _path,
+    //     };
+    //     await createMediaUnit(mu);
+    //   },
 
-      async build({ reqBuilder, worker_type, media_id, media_unit_id }) {
-        if (worker_type == "vlm") {
-          // Helper to clean up response text
-          const cleanResponse = (text: string): string => {
-            const prefixes = [
-              "This is an image of a ",
-              "The image is ",
-              "The image depicts ",
-              "The image captures ",
-              "This image depicts ",
-              "This image captures ",
-              "In this image, ",
-              "The image shows ",
-              "The image captures ",
-              "This photo depicts ",
-              "This photo captures ",
-              "In this photo, ",
-              "The photo shows ",
-              "The photo captures ",
-            ];
-            for (const prefix of prefixes) {
-              if (text.startsWith(prefix)) {
-                text = text.slice(prefix.length);
-                text = text.charAt(0).toUpperCase() + text.slice(1);
-                break;
-              }
-            }
-            return text;
-          };
+    //   async build({ reqBuilder, worker_type, media_id, media_unit_id }) {
+    //     if (worker_type == "vlm") {
+    //       // Helper to clean up response text
+    //       const cleanResponse = (text: string): string => {
+    //         const prefixes = [
+    //           "This is an image of a ",
+    //           "The image is ",
+    //           "The image depicts ",
+    //           "The image captures ",
+    //           "This image depicts ",
+    //           "This image captures ",
+    //           "In this image, ",
+    //           "The image shows ",
+    //           "The image captures ",
+    //           "This photo depicts ",
+    //           "This photo captures ",
+    //           "In this photo, ",
+    //           "The photo shows ",
+    //           "The photo captures ",
+    //         ];
+    //         for (const prefix of prefixes) {
+    //           if (text.startsWith(prefix)) {
+    //             text = text.slice(prefix.length);
+    //             text = text.charAt(0).toUpperCase() + text.slice(1);
+    //             break;
+    //           }
+    //         }
+    //         return text;
+    //       };
 
-          // Helper to create VLM job
-          const createVlmJob = (instruction: string) => {
-            return reqBuilder.add_job<WorkerInput__Vlm, WorkerOutput__Vlm>(
-              worker_type,
-              {
-                messages: [
-                  {
-                    role: "system",
-                    content: [
-                      {
-                        type: "text",
-                        text: "You are an AI assistant that provides detailed descriptions of images. Answer user question by examining each image carefully.",
-                      },
-                    ],
-                  },
-                  {
-                    role: "user",
-                    content: [{ type: "text", text: instruction }],
-                  },
-                  {
-                    role: "assistant",
-                    content: [
-                      {
-                        type: "image",
-                        image: { __type: "resource-ref", id: media_unit_id },
-                      },
-                    ],
-                  },
-                ],
-              }
-            );
-          };
+    //       // Helper to create VLM job
+    //       const createVlmJob = (instruction: string) => {
+    //         return reqBuilder.add_job<WorkerInput__Vlm, WorkerOutput__Vlm>(
+    //           worker_type,
+    //           {
+    //             messages: [
+    //               {
+    //                 role: "system",
+    //                 content: [
+    //                   {
+    //                     type: "text",
+    //                     text: "You are an AI assistant that provides detailed descriptions of images. Answer user question by examining each image carefully.",
+    //                   },
+    //                 ],
+    //               },
+    //               {
+    //                 role: "user",
+    //                 content: [{ type: "text", text: instruction }],
+    //               },
+    //               {
+    //                 role: "assistant",
+    //                 content: [
+    //                   {
+    //                     type: "image",
+    //                     image: { __type: "resource-ref", id: media_unit_id },
+    //                   },
+    //                 ],
+    //               },
+    //             ],
+    //           }
+    //         );
+    //       };
 
-          logger.info({ media_unit_id }, 'indexing: Creating VLM jobs');
+    //       logger.info({ media_unit_id }, 'indexing: Creating VLM jobs');
 
-          // 1. General description job (always runs, updates media_unit.description)
-          const descriptionJob = createVlmJob(
-            "Provide a concise description of the content of this image in a few words."
-          );
+    //       // 1. General description job (always runs, updates media_unit.description)
+    //       const descriptionJob = createVlmJob(
+    //         "Provide a concise description of the content of this image in a few words."
+    //       );
           
-          descriptionJob.then(async (output) => {
-            const description = cleanResponse(output.response);
+    //       descriptionJob.then(async (output) => {
+    //         const description = cleanResponse(output.response);
 
-            const mu = await getMediaUnitById(media_unit_id);
-            if (!mu) {
-              logger.error(
-                `MediaUnit not found for media_unit_id ${media_unit_id}`
-              );
-              return;
-            }
+    //         const mu = await getMediaUnitById(media_unit_id);
+    //         if (!mu) {
+    //           logger.error(
+    //             `MediaUnit not found for media_unit_id ${media_unit_id}`
+    //           );
+    //           return;
+    //         }
 
-            // Forward to clients
-            const msg: ServerToClientMessage = {
-              type: "agent_card",
-              id: mu.id,
-              content: description,
-              media_id: mu.media_id,
-              media_unit_id: mu.id,
-              at_time: mu.at_time,
-            };
-            for (const [id, client] of opts.clients.entries()) {
-              client.send(msg);
-            }
+    //         // Forward to clients
+    //         const msg: ServerToClientMessage = {
+    //           type: "agent_card",
+    //           id: mu.id,
+    //           content: description,
+    //           media_id: mu.media_id,
+    //           media_unit_id: mu.id,
+    //           at_time: mu.at_time,
+    //         };
+    //         for (const [id, client] of opts.clients.entries()) {
+    //           client.send(msg);
+    //         }
 
-            // Forward to webhook
-            opts.forward_to_webhook({
-              event: "agent_response",
-              created_at: new Date().toISOString(),
-              media_unit_id: mu.id,
-              media_id: mu.media_id,
-              content: description,
-            });
+    //         // Forward to webhook
+    //         opts.forward_to_webhook({
+    //           event: "agent_response",
+    //           created_at: new Date().toISOString(),
+    //           media_unit_id: mu.id,
+    //           media_id: mu.media_id,
+    //           content: description,
+    //         });
 
-            // Update media unit in database
-            updateMediaUnit(media_unit_id, { description });
-          });
+    //         // Update media unit in database
+    //         updateMediaUnit(media_unit_id, { description });
+    //       });
 
-          logger.info({ media_unit_id }, 'indexing: Fetching custom agents from database');
+    //       logger.info({ media_unit_id }, 'indexing: Fetching custom agents from database');
 
-          // 2. Custom agents from database (store in agent_responses table)
-          const agents = await getAllAgents();
+    //       // 2. Custom agents from database (store in agent_responses table)
+    //       const agents = await getAllAgents();
 
-          logger.info({ media_unit_id, agents }, `indexing: Retrieved custom agents from database`);
-          for (const agent of agents) {
+    //       logger.info({ media_unit_id, agents }, `indexing: Retrieved custom agents from database`);
+    //       for (const agent of agents) {
             
-            logger.info({ media_unit_id, agent_id: agent.id }, 'indexing: Creating VLM job for custom agent');
-            const agentJob = createVlmJob(agent.instruction);
+    //         logger.info({ media_unit_id, agent_id: agent.id }, 'indexing: Creating VLM job for custom agent');
+    //         const agentJob = createVlmJob(agent.instruction);
             
-            agentJob.then(async (output) => {
-              let content = cleanResponse(output.response);
+    //         agentJob.then(async (output) => {
+    //           let content = cleanResponse(output.response);
 
-              const mu = await getMediaUnitById(media_unit_id);
-              if (!mu) {
-                logger.error(
-                  `MediaUnit not found for media_unit_id ${media_unit_id}`
-                );
-                return;
-              }
+    //           const mu = await getMediaUnitById(media_unit_id);
+    //           if (!mu) {
+    //             logger.error(
+    //               `MediaUnit not found for media_unit_id ${media_unit_id}`
+    //             );
+    //             return;
+    //           }
 
-              const agentResponseId = crypto.randomUUID();
+    //           const agentResponseId = crypto.randomUUID();
 
-              // Store in agent_responses table
-              await createAgentResponse({
-                id: agentResponseId,
-                agent_id: agent.id,
-                media_unit_id: media_unit_id,
-                content: content,
-                created_at: Date.now(),
-              });
+    //           // Store in agent_responses table
+    //           await createAgentResponse({
+    //             id: agentResponseId,
+    //             agent_id: agent.id,
+    //             media_unit_id: media_unit_id,
+    //             content: content,
+    //             created_at: Date.now(),
+    //           });
 
-              // Forward to clients
-              const msg: ServerToClientMessage = {
-                type: "agent_card",
-                id: agentResponseId,
-                content: content,
-                media_id: media_id,
-                media_unit_id: media_unit_id,
-                at_time: mu.at_time,
-                agent_id: agent.id,
-                agent_name: agent.name,
-              };
+    //           // Forward to clients
+    //           const msg: ServerToClientMessage = {
+    //             type: "agent_card",
+    //             id: agentResponseId,
+    //             content: content,
+    //             media_id: media_id,
+    //             media_unit_id: media_unit_id,
+    //             at_time: mu.at_time,
+    //             agent_id: agent.id,
+    //             agent_name: agent.name,
+    //           };
 
-              for (const [id, client] of opts.clients.entries()) {
-                client.send(msg);
-              }
+    //           for (const [id, client] of opts.clients.entries()) {
+    //             client.send(msg);
+    //           }
 
-              // Forward to webhook with agent fields
-              opts.forward_to_webhook({
-                event: "agent_response",
-                created_at: new Date().toISOString(),
-                media_unit_id: media_unit_id,
-                media_id: media_id,
-                content: content,
-                agent_id: agent.id,
-                agent_name: agent.name,
-              });
-            });
-          }
-        }
+    //           // Forward to webhook with agent fields
+    //           opts.forward_to_webhook({
+    //             event: "agent_response",
+    //             created_at: new Date().toISOString(),
+    //             media_unit_id: media_unit_id,
+    //             media_id: media_id,
+    //             content: content,
+    //             agent_id: agent.id,
+    //             agent_name: agent.name,
+    //           });
+    //         });
+    //       }
+    //     }
 
-        if (worker_type == "embedding") {
-          reqBuilder
-            .add_job<WorkerInput__Embedding, WorkerOutput__Embedding>(
-              worker_type,
-              {
-                filepath: {
-                  __type: "resource-ref",
-                  id: media_unit_id,
-                },
-              }
-            )
-            .then(async (output) => {
-              // Convert number[] to Uint8Array for database storage
-              const embeddingBuffer = output.embedding
-                ? new Uint8Array(new Float32Array(output.embedding).buffer)
-                : null;
+    //     if (worker_type == "embedding") {
+    //       reqBuilder
+    //         .add_job<WorkerInput__Embedding, WorkerOutput__Embedding>(
+    //           worker_type,
+    //           {
+    //             filepath: {
+    //               __type: "resource-ref",
+    //               id: media_unit_id,
+    //             },
+    //           }
+    //         )
+    //         .then(async (output) => {
+    //           // Convert number[] to Uint8Array for database storage
+    //           const embeddingBuffer = output.embedding
+    //             ? new Uint8Array(new Float32Array(output.embedding).buffer)
+    //             : null;
 
-              // Store in database
-              updateMediaUnit(media_unit_id, {
-                embedding: embeddingBuffer,
-              });
-            });
-        }
-      },
-    },
+    //           // Store in database
+    //           updateMediaUnit(media_unit_id, {
+    //             embedding: embeddingBuffer,
+    //           });
+    //         });
+    //     }
+    //   },
+    // },
     segmentation: {
       worker_types: ["segmentation"],
       interval: 3000,
@@ -431,6 +433,29 @@ export const create_builders: (opts: ForwardingOpts) => {
             state.frame_stats_messages =
               state.frame_stats_messages.slice(-1000);
           });
+      },
+    },
+    embedding: {
+      worker_types: ["embedding"],
+      interval: 1000,
+      should_run() {
+        return true;
+      },
+      build({ reqBuilder, worker_type, media_id, media_unit_id }) {
+        reqBuilder
+          .add_job<WorkerInput__Rzen, WorkerOutput__Rzen>(
+            worker_type,
+            {
+              image: {
+                __type: "resource-ref",
+                id: media_unit_id,
+              }
+            }
+          )
+          .then(async (output) => {
+              console.log('Received Rzen embedding output', output);
+
+          } );
       },
     },
   };
