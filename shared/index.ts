@@ -139,6 +139,8 @@ export type RESTWhereField = {
     json_path?: string;
 };
 
+export type RESTCastOptions = { type: 'json' | 'embedding'; default?: any };
+
 export type RESTSelect = {
     type?: 'select';
     table: string;
@@ -157,14 +159,14 @@ export type RESTSelect = {
         direction: 'ASC' | 'DESC';
     };
     expect?: { is: 'single', value_when_no_item?: any };
-    cast?: Record<string, 'json' | 'embedding'>;
+    cast?: Record<string, RESTCastOptions>;
 };
 
 export type RESTInsert = {
     type: 'insert';
     table: string;
     values: Record<string, any> | Record<string, any>[];
-    cast?: Record<string, 'json' | 'embedding'>;
+    cast?: Record<string, RESTCastOptions>;
 };
 
 export type RESTUpdate = {
@@ -172,14 +174,14 @@ export type RESTUpdate = {
     table: string;
     where: RESTWhereField[];
     values: Record<string, any>;
-    cast?: Record<string, 'json' | 'embedding'>;
+    cast?: Record<string, RESTCastOptions>;
 };
 
 export type RESTDelete = {
     type: 'delete';
     table: string;
     where: RESTWhereField[];
-    cast?: Record<string, 'json' | 'embedding'>;
+    cast?: Record<string, RESTCastOptions>;
 };
 
 export type RESTQuery = RESTSelect | RESTInsert | RESTUpdate | RESTDelete;

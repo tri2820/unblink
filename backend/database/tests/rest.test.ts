@@ -581,7 +581,7 @@ test("executeREST - cast json", async () => {
     const result = await executeREST({
         table: 'media',
         where: [{ field: 'id', op: 'equals', value: testMediaId }],
-        cast: { labels: 'json' },
+        cast: { labels: { type: 'json', default: [] } },
         expect: { is: 'single', value_when_no_item: undefined }
     });
 
@@ -606,7 +606,7 @@ test("executeREST - cast embedding", async () => {
             path: '/tmp/test_embedding.jpg',
             type: 'image'
         },
-        cast: { embedding: 'embedding' }
+        cast: { embedding: { type: 'embedding' } }
     });
     createdMediaUnitIds.push(mediaUnitId);
 
@@ -614,7 +614,7 @@ test("executeREST - cast embedding", async () => {
     const result = await executeREST({
         table: 'media_units',
         where: [{ field: 'id', op: 'equals', value: mediaUnitId }],
-        cast: { embedding: 'embedding' },
+        cast: { embedding: { type: 'embedding' } },
         expect: { is: 'single', value_when_no_item: undefined }
     });
 

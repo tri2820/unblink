@@ -1,36 +1,17 @@
-import type { Database } from '@tursodatabase/database';
-import { getDb } from './database';
-import type { Media, MediaUnit, Secret, Session, Setting, User, Agent, Moment, AgentResponse } from '~/shared/database';
-import type { RESTQuery, RESTSelect, RESTInsert, RESTUpdate, RESTDelete, RESTWhereField } from '~/shared';
+import type { RESTWhereField } from '~/shared';
+import type { Agent, AgentResponse, Media, MediaUnit, Moment, Secret, Session, Setting, User } from '~/shared/database';
 
 
 import { executeREST } from './rest';
 
 // Media utilities
-function processMediaRow(row: any): Media {
-    if (!row) return row;
-    try {
-        if (typeof row.labels === 'string') {
-            row.labels = JSON.parse(row.labels);
-        }
-    } catch (e) {
-        console.error(`Failed to parse labels for media ${row.id}:`, row.labels);
-        row.labels = []; // Default to empty array on error
-    }
-
-    return row as Media;
-}
-
 export async function getMediaById(id: string): Promise<Media | undefined> {
-    const rows = await executeREST({
+    return await executeREST({
         table: 'media',
         where: [{ field: 'id', op: 'equals', value: id }],
         expect: { is: 'single', value_when_no_item: undefined },
-        cast: { labels: 'json' }
+        cast: { labels: { type: 'json', default: [] } }
     });
-
-    if (rows === undefined) return undefined;
-    return processMediaRow(rows);
 }
 
 export async function getAllMedia(): Promise<Media[]> {
@@ -38,10 +19,10 @@ export async function getAllMedia(): Promise<Media[]> {
         table: 'media',
         order_by: { field: 'updated_at', direction: 'DESC' },
         limit: 100, // Reasonable limit for "all"
-        cast: { labels: 'json' }
+        cast: { labels: { type: 'json', default: [] } }
     });
 
-    return rows.map(processMediaRow);
+    return rows as Media[];
 }
 
 export async function getMediaByLabel(label: string): Promise<Media[]> {
@@ -49,10 +30,10 @@ export async function getMediaByLabel(label: string): Promise<Media[]> {
         table: 'media',
         where: [{ field: 'labels', op: 'like', value: `%"${label}"%` }],
         limit: 100,
-        cast: { labels: 'json' }
+        cast: { labels: { type: 'json', default: [] } }
     });
 
-    return rows.map(processMediaRow);
+    return rows as Media[];
 }
 
 export async function createMedia(media: Media): Promise<void> {
@@ -70,7 +51,7 @@ export async function createMedia(media: Media): Promise<void> {
             save_to_disk: media.save_to_disk === undefined ? null : media.save_to_disk,
             save_location: media.save_location === undefined ? null : media.save_location
         },
-        cast: { labels: 'json' }
+        cast: { labels: { type: 'json' } }
     });
 }
 
@@ -86,7 +67,7 @@ export async function updateMedia(id: string, updates: Partial<Omit<Media, 'id'>
         table: 'media',
         where: [{ field: 'id', op: 'equals', value: id }],
         values: updatesCopy,
-        cast: { labels: 'json' }
+        cast: { labels: { type: 'json' } }
     });
 }
 
@@ -159,7 +140,7 @@ export async function createMediaUnit(mediaUnit: MediaUnit) {
             path: mediaUnit.path,
             type: mediaUnit.type
         },
-        cast: mediaUnit.embedding ? { embedding: 'embedding' } : undefined
+        cast: mediaUnit.embedding ? { embedding: { type: 'embedding' } } : undefined
     });
 }
 
@@ -168,7 +149,7 @@ export async function getMediaUnitById(id: string): Promise<MediaUnit | undefine
         table: 'media_units',
         where: [{ field: 'id', op: 'equals', value: id }],
         expect: { is: 'single', value_when_no_item: undefined },
-        cast: { embedding: 'embedding' }
+        cast: { embedding: { type: 'embedding' } }
     });
 }
 
@@ -178,7 +159,7 @@ export async function getMediaUnitsByMediaId(mediaId: string): Promise<MediaUnit
         where: [{ field: 'media_id', op: 'equals', value: mediaId }],
         order_by: { field: 'at_time', direction: 'ASC' },
         limit: 1000,
-        cast: { embedding: 'embedding' }
+        cast: { embedding: { type: 'embedding' } }
     });
     return rows as MediaUnit[];
 }
@@ -192,7 +173,7 @@ export async function updateMediaUnit(id: string, updates: Partial<Omit<MediaUni
         table: 'media_units',
         where: [{ field: 'id', op: 'equals', value: id }],
         values: updates,
-        cast: updates.embedding ? { embedding: 'embedding' } : undefined
+        cast: updates.embedding ? { embedding: { type: 'embedding' } } : undefined
     });
 }
 
@@ -419,7 +400,7 @@ export async function getMediaUnitsByEmbedding(queryEmbedding: number[], options
         where: whereConditions,
         order_by: { field: 'distance', direction: 'ASC' }, // ASC because lower distance = higher similarity
         limit: 20,
-        cast: { embedding: 'embedding' }
+        cast: { embedding: { type: 'embedding' } }
     });
     return rows;
 }
@@ -430,7 +411,7 @@ export async function getMediaUnitsByIds(ids: string[]): Promise<MediaUnit[]> {
         table: 'media_units',
         where: [{ field: 'id', op: 'in', value: ids }],
         limit: ids.length,
-        cast: { embedding: 'embedding' }
+        cast: { embedding: { type: 'embedding' } }
     });
     return rows as MediaUnit[];
 }
@@ -445,7 +426,7 @@ export async function getFirstMediaUnitInTimeRange(mediaId: string, startTime: n
         ],
         order_by: { field: 'at_time', direction: 'ASC' },
         expect: { is: 'single', value_when_no_item: undefined },
-        cast: { embedding: 'embedding' }
+        cast: { embedding: { type: 'embedding' } }
     });
 }
 
@@ -460,7 +441,7 @@ export async function getDescribedMediaUnitsInTimeRange(mediaId: string, startTi
         ],
         order_by: { field: 'at_time', direction: 'ASC' },
         limit: 1000,
-        cast: { embedding: 'embedding' }
+        cast: { embedding: { type: 'embedding' } }
     });
     return rows as MediaUnit[];
 }

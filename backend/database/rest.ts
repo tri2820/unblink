@@ -1,6 +1,6 @@
 import type { Database } from '@tursodatabase/database';
 import { getDb } from './database';
-import type { RESTQuery, RESTSelect, RESTInsert, RESTUpdate, RESTDelete, RESTWhereField } from '~/shared';
+import type { RESTQuery, RESTSelect, RESTInsert, RESTUpdate, RESTDelete, RESTWhereField, RESTCastOptions } from '~/shared';
 
 // Cache for database schema
 let schemaCache: Record<string, string[]> | null = null;
@@ -37,10 +37,11 @@ export function clearSchemaCache(): void {
 }
 
 // Apply cast to values (for insert/update)
-function applyCast(values: Record<string, any>, cast?: Record<string, 'json' | 'embedding'>) {
+function applyCast(values: Record<string, any>, cast?: Record<string, RESTCastOptions>) {
     if (!cast) return;
-    for (const [column, castType] of Object.entries(cast)) {
+    for (const [column, castOptions] of Object.entries(cast)) {
         if (values[column] !== null && values[column] !== undefined) {
+            const castType = castOptions.type;
             if (castType === 'json') {
                 values[column] = JSON.stringify(values[column]);
             } else if (castType === 'embedding') {
@@ -297,20 +298,32 @@ async function handleSelect(query: RESTSelect, db: Database, schema: Record<stri
 
     // Handle cast for selected fields
     if (query.cast) {
-        for (const [column, castType] of Object.entries(query.cast)) {
+        for (const [column, castOptions] of Object.entries(query.cast)) {
             for (const row of rows) {
+                const defaultValue = castOptions.default;
                 if (row[column] !== null && row[column] !== undefined) {
-                    if (castType === 'json') {
-                        row[column] = JSON.parse(row[column]);
-                    } else if (castType === 'embedding') {
-                        // Assume BLOB is stored as Buffer, convert to number[]
-                        const buffer = row[column] as Buffer;
-                        const floatArray = new Float32Array(buffer.length / 4);
-                        for (let i = 0; i < floatArray.length; i++) {
-                            floatArray[i] = buffer.readFloatLE(i * 4);
+                    const castType = castOptions.type;
+                    try {
+                        if (castType === 'json') {
+                            row[column] = JSON.parse(row[column]);
+                        } else if (castType === 'embedding') {
+                            // Assume BLOB is stored as Buffer, convert to number[]
+                            const buffer = row[column] as Buffer;
+                            const floatArray = new Float32Array(buffer.length / 4);
+                            for (let i = 0; i < floatArray.length; i++) {
+                                floatArray[i] = buffer.readFloatLE(i * 4);
+                            }
+                            row[column] = Array.from(floatArray);
                         }
-                        row[column] = Array.from(floatArray);
+                    } catch (error) {
+                        if (defaultValue !== undefined) {
+                            row[column] = defaultValue;
+                        } else {
+                            throw error;
+                        }
                     }
+                } else if (defaultValue !== undefined) {
+                    row[column] = defaultValue;
                 }
             }
         }
