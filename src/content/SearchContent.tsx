@@ -1,5 +1,5 @@
 import SearchBar from "~/src/SearchBar";
-import catPNG from '~/assets/cat.png';
+import catSVG from '~/assets/cat.svg';
 
 export default function SearchContent() {
   return <div class="h-screen py-2 pr-2">
@@ -7,7 +7,7 @@ export default function SearchContent() {
 
       <div class="mt-[40vh]  space-y-8">
         <div class="flex items-center space-x-2 justify-center relative">
-          <img src={catPNG} class="h-24 absolute left-0 bottom-0 -translate-x-full" />
+          <img src={catSVG} class="h-24 absolute left-0 bottom-0 -translate-x-full" />
           <div class="flex-1 font-nunito font-medium text-white text-7xl leading-none px-4">
             Unblink
           </div>
