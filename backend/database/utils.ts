@@ -25,18 +25,20 @@ export async function getMediaById(id: string): Promise<Media | undefined> {
     const rows = await executeREST({
         table: 'media',
         where: [{ field: 'id', op: 'equals', value: id }],
-        limit: 1
+        expect: { is: 'single', value_when_no_item: undefined },
+        cast: { labels: 'json' }
     });
 
-    if (rows.length === 0) return undefined;
-    return processMediaRow(rows[0]);
+    if (rows === undefined) return undefined;
+    return processMediaRow(rows);
 }
 
 export async function getAllMedia(): Promise<Media[]> {
     const rows = await executeREST({
         table: 'media',
         order_by: { field: 'updated_at', direction: 'DESC' },
-        limit: 100 // Reasonable limit for "all"
+        limit: 100, // Reasonable limit for "all"
+        cast: { labels: 'json' }
     });
 
     return rows.map(processMediaRow);
@@ -46,7 +48,8 @@ export async function getMediaByLabel(label: string): Promise<Media[]> {
     const rows = await executeREST({
         table: 'media',
         where: [{ field: 'labels', op: 'like', value: `%"${label}"%` }],
-        limit: 100
+        limit: 100,
+        cast: { labels: 'json' }
     });
 
     return rows.map(processMediaRow);
@@ -62,11 +65,12 @@ export async function createMedia(media: Media): Promise<void> {
             id: media.id,
             name: media.name,
             uri: media.uri,
-            labels: JSON.stringify(media.labels),
+            labels: media.labels,
             updated_at: updatedAt,
             save_to_disk: media.save_to_disk === undefined ? null : media.save_to_disk,
             save_location: media.save_location === undefined ? null : media.save_location
-        }
+        },
+        cast: { labels: 'json' }
     });
 }
 
@@ -75,16 +79,14 @@ export async function updateMedia(id: string, updates: Partial<Omit<Media, 'id'>
     if (fields.length === 0) return;
 
     const updatesCopy: any = { ...updates };
-    if (updatesCopy.labels) {
-        updatesCopy.labels = JSON.stringify(updatesCopy.labels);
-    }
     updatesCopy.updated_at = Date.now();
 
     await executeREST({
         type: 'update',
         table: 'media',
         where: [{ field: 'id', op: 'equals', value: id }],
-        values: updatesCopy
+        values: updatesCopy,
+        cast: { labels: 'json' }
     });
 }
 
@@ -98,12 +100,11 @@ export async function deleteMedia(id: string): Promise<void> {
 
 // Settings utilities
 export async function getSetting(key: string): Promise<Setting | undefined> {
-    const rows = await executeREST({
+    return await executeREST({
         table: 'settings',
         where: [{ field: 'key', op: 'equals', value: key }],
-        limit: 1
+        expect: { is: 'single', value_when_no_item: undefined }
     });
-    return rows[0] as Setting | undefined;
 }
 
 export async function getAllSettings(): Promise<Setting[]> {
@@ -157,17 +158,18 @@ export async function createMediaUnit(mediaUnit: MediaUnit) {
             embedding: mediaUnit.embedding || null,
             path: mediaUnit.path,
             type: mediaUnit.type
-        }
+        },
+        cast: mediaUnit.embedding ? { embedding: 'embedding' } : undefined
     });
 }
 
 export async function getMediaUnitById(id: string): Promise<MediaUnit | undefined> {
-    const rows = await executeREST({
+    return await executeREST({
         table: 'media_units',
         where: [{ field: 'id', op: 'equals', value: id }],
-        limit: 1
+        expect: { is: 'single', value_when_no_item: undefined },
+        cast: { embedding: 'embedding' }
     });
-    return rows[0] as MediaUnit | undefined;
 }
 
 export async function getMediaUnitsByMediaId(mediaId: string): Promise<MediaUnit[]> {
@@ -175,7 +177,8 @@ export async function getMediaUnitsByMediaId(mediaId: string): Promise<MediaUnit
         table: 'media_units',
         where: [{ field: 'media_id', op: 'equals', value: mediaId }],
         order_by: { field: 'at_time', direction: 'ASC' },
-        limit: 1000
+        limit: 1000,
+        cast: { embedding: 'embedding' }
     });
     return rows as MediaUnit[];
 }
@@ -188,7 +191,8 @@ export async function updateMediaUnit(id: string, updates: Partial<Omit<MediaUni
         type: 'update',
         table: 'media_units',
         where: [{ field: 'id', op: 'equals', value: id }],
-        values: updates
+        values: updates,
+        cast: updates.embedding ? { embedding: 'embedding' } : undefined
     });
 }
 
@@ -211,12 +215,11 @@ export async function createSecret(key: string, value: string): Promise<string> 
 }
 
 export async function getSecret(key: string): Promise<Secret | undefined> {
-    const rows = await executeREST({
+    return await executeREST({
         table: 'secrets',
         where: [{ field: 'key', op: 'equals', value: key }],
-        limit: 1
+        expect: { is: 'single', value_when_no_item: undefined }
     });
-    return rows[0] as Secret | undefined;
 }
 
 export async function getAllSecrets(): Promise<Secret[]> {
@@ -275,14 +278,14 @@ function processSessionRow(row: any): Session {
 }
 
 export async function getSessionById(sessionId: string): Promise<Session | undefined> {
-    const rows = await executeREST({
+    const result = await executeREST({
         table: 'sessions',
         where: [{ field: 'session_id', op: 'equals', value: sessionId }],
-        limit: 1
+        expect: { is: 'single', value_when_no_item: undefined }
     });
 
-    if (rows.length === 0) return undefined;
-    return processSessionRow(rows[0]);
+    if (result === undefined) return undefined;
+    return processSessionRow(result);
 }
 
 export async function getSessionsByUserId(userId: string): Promise<Session[]> {
@@ -340,21 +343,19 @@ export async function createUser(user: User): Promise<void> {
 }
 
 export async function getUserById(id: string): Promise<User | undefined> {
-    const rows = await executeREST({
+    return await executeREST({
         table: 'users',
         where: [{ field: 'id', op: 'equals', value: id }],
-        limit: 1
+        expect: { is: 'single', value_when_no_item: undefined }
     });
-    return rows[0] as User | undefined;
 }
 
 export async function getUserByUsername(username: string): Promise<User | undefined> {
-    const rows = await executeREST({
+    return await executeREST({
         table: 'users',
         where: [{ field: 'username', op: 'equals', value: username }],
-        limit: 1
+        expect: { is: 'single', value_when_no_item: undefined }
     });
-    return rows[0] as User | undefined;
 }
 
 export async function updateUser(id: string, updates: Partial<Omit<User, 'id'>>): Promise<void> {
@@ -417,7 +418,8 @@ export async function getMediaUnitsByEmbedding(queryEmbedding: number[], options
         ],
         where: whereConditions,
         order_by: { field: 'distance', direction: 'ASC' }, // ASC because lower distance = higher similarity
-        limit: 20
+        limit: 20,
+        cast: { embedding: 'embedding' }
     });
     return rows;
 }
@@ -427,13 +429,14 @@ export async function getMediaUnitsByIds(ids: string[]): Promise<MediaUnit[]> {
     const rows = await executeREST({
         table: 'media_units',
         where: [{ field: 'id', op: 'in', value: ids }],
-        limit: ids.length
+        limit: ids.length,
+        cast: { embedding: 'embedding' }
     });
     return rows as MediaUnit[];
 }
 
 export async function getFirstMediaUnitInTimeRange(mediaId: string, startTime: number, endTime: number): Promise<MediaUnit | undefined> {
-    const rows = await executeREST({
+    return await executeREST({
         table: 'media_units',
         where: [
             { field: 'media_id', op: 'equals', value: mediaId },
@@ -441,9 +444,9 @@ export async function getFirstMediaUnitInTimeRange(mediaId: string, startTime: n
             { field: 'at_time', op: 'lte', value: endTime }
         ],
         order_by: { field: 'at_time', direction: 'ASC' },
-        limit: 1
+        expect: { is: 'single', value_when_no_item: undefined },
+        cast: { embedding: 'embedding' }
     });
-    return rows[0] as MediaUnit | undefined;
 }
 
 export async function getDescribedMediaUnitsInTimeRange(mediaId: string, startTime: number, endTime: number): Promise<MediaUnit[]> {
@@ -456,19 +459,19 @@ export async function getDescribedMediaUnitsInTimeRange(mediaId: string, startTi
             { field: 'description', op: 'is_not', value: null }
         ],
         order_by: { field: 'at_time', direction: 'ASC' },
-        limit: 1000
+        limit: 1000,
+        cast: { embedding: 'embedding' }
     });
     return rows as MediaUnit[];
 }
 
 // Moment utilities
 export async function getMomentById(id: string): Promise<Moment | undefined> {
-    const rows = await executeREST({
+    return await executeREST({
         table: 'moments',
         where: [{ field: 'id', op: 'equals', value: id }],
-        limit: 1
+        expect: { is: 'single', value_when_no_item: undefined }
     });
-    return rows[0] as Moment | undefined;
 }
 
 export async function getAllMoments(): Promise<Moment[]> {
@@ -542,21 +545,19 @@ export async function createAgent(agent: Agent): Promise<void> {
 }
 
 export async function getAgentById(id: string): Promise<Agent | undefined> {
-    const rows = await executeREST({
+    return await executeREST({
         table: 'agents',
         where: [{ field: 'id', op: 'equals', value: id }],
-        limit: 1
+        expect: { is: 'single', value_when_no_item: undefined }
     });
-    return rows[0] as Agent | undefined;
 }
 
 export async function getAgentByName(name: string): Promise<Agent | undefined> {
-    const rows = await executeREST({
+    return await executeREST({
         table: 'agents',
         where: [{ field: 'name', op: 'equals', value: name }],
-        limit: 1
+        expect: { is: 'single', value_when_no_item: undefined }
     });
-    return rows[0] as Agent | undefined;
 }
 
 export async function getAllAgents(): Promise<Agent[]> {
@@ -623,12 +624,11 @@ export async function getAgentResponsesByAgent(agent_id: string): Promise<AgentR
 }
 
 export async function getAgentResponseById(id: string): Promise<AgentResponse | undefined> {
-    const rows = await executeREST({
+    return await executeREST({
         table: 'agent_responses',
         where: [{ field: 'id', op: 'equals', value: id }],
-        limit: 1
+        expect: { is: 'single', value_when_no_item: undefined }
     });
-    return rows[0] as AgentResponse | undefined;
 }
 
 export async function getAllAgentResponses(): Promise<AgentResponse[]> {

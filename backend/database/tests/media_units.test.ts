@@ -53,8 +53,8 @@ test("Create a new media_unit entry with embedding", async () => {
     expect(mediaUnit).toBeDefined();
     expect(mediaUnit?.id).toBe(testMediaUnitId);
     expect(mediaUnit?.media_id).toBe(testMediaId);
-    expect(mediaUnit?.embedding).toBeInstanceOf(Uint8Array);
-    expect(mediaUnit?.embedding).toEqual(blob);
+    expect(mediaUnit?.embedding).toBeArray();
+    expect(mediaUnit?.embedding).toHaveLength(DATABASE_EMBEDDING_DIMENSION);
 });
 
 test("Update media_unit description", async () => {

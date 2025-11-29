@@ -36,6 +36,33 @@ export function clearSchemaCache(): void {
     schemaCache = null;
 }
 
+// Apply cast to values (for insert/update)
+function applyCast(values: Record<string, any>, cast?: Record<string, 'json' | 'embedding'>) {
+    if (!cast) return;
+    for (const [column, castType] of Object.entries(cast)) {
+        if (values[column] !== null && values[column] !== undefined) {
+            if (castType === 'json') {
+                values[column] = JSON.stringify(values[column]);
+            } else if (castType === 'embedding') {
+                // Convert number[] or Uint8Array to Buffer
+                const value = values[column];
+                let buffer: Buffer;
+                if (value instanceof Uint8Array || Buffer.isBuffer(value)) {
+                    buffer = Buffer.from(value);
+                } else if (Array.isArray(value)) {
+                    // number[] case
+                    const arr = value as number[];
+                    buffer = Buffer.alloc(arr.length * 4);
+                    new Float32Array(buffer.buffer, buffer.byteOffset, arr.length).set(arr);
+                } else {
+                    throw new Error(`Invalid embedding type: ${typeof value}`);
+                }
+                values[column] = buffer;
+            }
+        }
+    }
+}
+
 // SQL identifier validation - alphanumeric, underscore, and dot only
 function isValidIdentifier(identifier: string): boolean {
     return /^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)?( as [a-zA-Z_][a-zA-Z0-9_]*)?$/.test(identifier);
@@ -73,7 +100,7 @@ async function validateField(field: string, allowedTables: Set<string>): Promise
         const potentialColumns = expression.match(/\b[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)?\b/g) || [];
         for (const col of potentialColumns) {
             // Skip function names and known SQL keywords
-            if (!['vector_distance_cos', 'vector32', 'cosine_similarity'].includes(col) && 
+            if (!['vector_distance_cos', 'vector32', 'vector768', 'vector', 'cosine_similarity'].includes(col) && 
                 !['and', 'or', 'not', 'is', 'null', 'true', 'false'].includes(col.toLowerCase())) {
                 await validateColumnReference(col, allowedTables);
             }
@@ -266,7 +293,40 @@ async function handleSelect(query: RESTSelect, db: Database, schema: Record<stri
     values.push(limit);
 
     const stmt = db.prepare(sql);
-    const rows = await stmt.all(...values);
+    let rows = await stmt.all(...values);
+
+    // Handle cast for selected fields
+    if (query.cast) {
+        for (const [column, castType] of Object.entries(query.cast)) {
+            for (const row of rows) {
+                if (row[column] !== null && row[column] !== undefined) {
+                    if (castType === 'json') {
+                        row[column] = JSON.parse(row[column]);
+                    } else if (castType === 'embedding') {
+                        // Assume BLOB is stored as Buffer, convert to number[]
+                        const buffer = row[column] as Buffer;
+                        const floatArray = new Float32Array(buffer.length / 4);
+                        for (let i = 0; i < floatArray.length; i++) {
+                            floatArray[i] = buffer.readFloatLE(i * 4);
+                        }
+                        row[column] = Array.from(floatArray);
+                    }
+                }
+            }
+        }
+    }
+
+    // Handle expect
+    if (query.expect?.is === 'single') {
+        if (rows.length === 0) {
+            return query.expect.value_when_no_item;
+        }
+        if (rows.length > 1) {
+            throw new Error('Multiple items found');
+        }
+        return rows[0];
+    }
+
     return rows;
 }
 
@@ -276,6 +336,11 @@ async function handleInsert(query: RESTInsert, db: Database, schema: Record<stri
     // Normalize values to array
     const rows = Array.isArray(query.values) ? query.values : [query.values];
     if (rows.length === 0) return;
+
+    // Apply cast to values
+    for (const row of rows) {
+        applyCast(row, query.cast);
+    }
 
     // Validate columns from the first row (assuming all rows have same structure)
     const columns = Object.keys(rows[0]);
@@ -321,6 +386,10 @@ async function handleInsert(query: RESTInsert, db: Database, schema: Record<stri
 
 async function handleUpdate(query: RESTUpdate, db: Database, schema: Record<string, string[]>): Promise<void> {
     await validateTable(query.table);
+
+    // Apply cast to values
+    applyCast(query.values, query.cast);
+
     const columns = Object.keys(query.values);
     const updateValues = Object.values(query.values);
 

@@ -543,4 +543,89 @@ test("executeREST - Validate ORDER BY direction", async () => {
     }
 });
 
+test("executeREST - expect single with one result", async () => {
+    const result = await executeREST({
+        table: 'media_units',
+        where: [{ field: 'id', op: 'equals', value: createdMediaUnitIds[0] }],
+        expect: { is: 'single', value_when_no_item: undefined }
+    });
+
+    expect(result).toBeDefined();
+    expect(result.id).toBe(createdMediaUnitIds[0]);
+});
+
+test("executeREST - expect single with no results", async () => {
+    const result = await executeREST({
+        table: 'media_units',
+        where: [{ field: 'id', op: 'equals', value: 'nonexistent-id' }],
+        expect: { is: 'single', value_when_no_item: undefined }
+    });
+
+    expect(result).toBeUndefined();
+});
+
+test("executeREST - expect single with multiple results", async () => {
+    try {
+        await executeREST({
+            table: 'media_units',
+            where: [{ field: 'media_id', op: 'equals', value: testMediaId }],
+            expect: { is: 'single', value_when_no_item: undefined }
+        });
+        expect(true).toBe(false); // Should not reach here
+    } catch (error: any) {
+        expect(error.message).toContain('Multiple items found');
+    }
+});
+
+test("executeREST - cast json", async () => {
+    const result = await executeREST({
+        table: 'media',
+        where: [{ field: 'id', op: 'equals', value: testMediaId }],
+        cast: { labels: 'json' },
+        expect: { is: 'single', value_when_no_item: undefined }
+    });
+
+    expect(result).toBeDefined();
+    expect(result.labels).toBeArray();
+    expect(result.labels).toContain('query-test');
+});
+
+test("executeREST - cast embedding", async () => {
+    // First, insert a media unit with embedding
+    const embedding = [0.1, 0.2, 0.3, 0.4];
+    const mediaUnitId = crypto.randomUUID();
+    await executeREST({
+        type: 'insert',
+        table: 'media_units',
+        values: {
+            id: mediaUnitId,
+            media_id: testMediaId,
+            at_time: Date.now(),
+            description: 'Test embedding',
+            embedding: embedding,
+            path: '/tmp/test_embedding.jpg',
+            type: 'image'
+        },
+        cast: { embedding: 'embedding' }
+    });
+    createdMediaUnitIds.push(mediaUnitId);
+
+    // Now select it back with cast
+    const result = await executeREST({
+        table: 'media_units',
+        where: [{ field: 'id', op: 'equals', value: mediaUnitId }],
+        cast: { embedding: 'embedding' },
+        expect: { is: 'single', value_when_no_item: undefined }
+    });
+
+    expect(result).toBeDefined();
+    expect(result.embedding).toBeArray();
+    expect(result.embedding).toHaveLength(4);
+    // Check values are approximately equal (Float32 precision)
+    expect(result.embedding[0]).toBeCloseTo(0.1, 5);
+    expect(result.embedding[1]).toBeCloseTo(0.2, 5);
+    expect(result.embedding[2]).toBeCloseTo(0.3, 5);
+    expect(result.embedding[3]).toBeCloseTo(0.4, 5);
+});
+
 
