@@ -6,7 +6,7 @@ import type { Resource, WorkerInput__Caption, WorkerInput__Llm, WorkerInput__Vlm
 import { FRAMES_DIR } from "../appdir";
 import { createMoment, updateMoment } from "../database/utils";
 import { logger } from "../logger";
-import { parseJsonFromString } from "./dirty_json";
+import { parseDirtyJson } from "./dirty_json";
 import type { MomentData } from "./frame_stats";
 
 type FrameData = {
@@ -96,7 +96,7 @@ Respond with ONLY valid JSON in this format:
     const llmResponse = llm_output.response;
 
     // Parse and validate the formatted response
-    const parsed = parseJsonFromString(llmResponse);
+    const parsed = parseDirtyJson(llmResponse);
 
     logger.info({ parsed }, 'Parsed LLM response');
 

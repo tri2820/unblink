@@ -30,12 +30,14 @@ test("Create a new agent", async () => {
     await createAgent({
         id: testAgentId,
         name: 'testagent',
-        instruction: 'Test instruction for agent'
+        instruction: 'Test instruction for agent',
+        metric_ids: ['metric1', 'metric2']
     });
     const agent = await getAgentById(testAgentId);
     expect(agent).toBeDefined();
     expect(agent?.name).toBe('testagent');
     expect(agent?.instruction).toBe('Test instruction for agent');
+    expect(agent?.metric_ids).toEqual(['metric1', 'metric2']);
 });
 
 test("Get agent by ID", async () => {
@@ -62,11 +64,13 @@ test("Update agent", async () => {
     expect(testAgentId).toBeDefined();
     await updateAgent(testAgentId, {
         name: 'updatedagent',
-        instruction: 'Updated instruction for agent'
+        instruction: 'Updated instruction for agent',
+        metric_ids: ['updated_metric1']
     });
     const updatedAgent = await getAgentById(testAgentId);
     expect(updatedAgent?.name).toBe('updatedagent');
     expect(updatedAgent?.instruction).toBe('Updated instruction for agent');
+    expect(updatedAgent?.metric_ids).toEqual(['updated_metric1']);
 });
 
 test("Delete agent and verify", async () => {
@@ -74,7 +78,8 @@ test("Delete agent and verify", async () => {
     await createAgent({
         id: agentId,
         name: 'testagent-delete',
-        instruction: 'Instruction for agent to be deleted'
+        instruction: 'Instruction for agent to be deleted',
+        metric_ids: ['delete_metric']
     });
     const agent = await getAgentById(agentId);
     expect(agent).toBeDefined();

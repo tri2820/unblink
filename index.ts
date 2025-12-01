@@ -7,28 +7,29 @@ import { admin } from "./admin";
 import { WsClient } from "./backend/WsClient";
 import { FRAMES_DIR, RUNTIME_DIR } from "./backend/appdir";
 import { auth_required, verifyPassword } from "./backend/auth";
+import { executeREST } from './backend/database/rest';
 import {
-    createAgent,
     createMedia,
     createSession,
     deleteAgent,
     deleteMedia,
     deleteSession,
+    getAgentById,
     getAllAgents,
     getAllMedia,
     getAllMoments,
     getAllSettings as getAllSettingsDB,
     getAllUsers,
     getMediaUnitById,
-    getMediaUnitsByEmbedding,
+    getMetricsByIds,
     getMomentById,
     getUserByUsername as getUserByUsernameDB,
     setSetting as setSettingDB,
-    updateMedia,
+    updateMedia
 } from "./backend/database/utils";
-import { executeREST } from './backend/database/rest';
 import { createForwardFunction } from "./backend/forward";
 import { logger } from "./backend/logger";
+import { agentsPostHandler } from "./backend/routes/agents";
 import { check_version } from "./backend/startup/check_version";
 import { connect_to_engine } from "./backend/startup/connect_to_engine";
 import { load_secrets } from "./backend/startup/load_secrets";
@@ -44,6 +45,7 @@ import type {
     ClientToServerMessage,
     RESTQuery,
 } from "./shared";
+import { type RemoteJob, type Resource, type WorkerRequest } from "./shared/engine";
 
 type ServerEphemeralState = {
     remote_worker_jobs_cont: Map<string, (output: any) => void>
@@ -67,7 +69,6 @@ type ServerEphemeralState = {
 };
 
 export type { ServerEphemeralState };
-import type { RemoteJob, Resource, WorkerRequest } from "./shared/engine";
 
 // ... (rest of imports)
 
@@ -280,9 +281,16 @@ const server = Bun.serve({
         },
 
         "/media/:id": {
-            PUT: async ({ params, body }: { params: { id: string }; body: any }) => {
+            PUT: async (req: Request, params: { id: string }) => {
+                const auth_res = await auth_required(settings, req);
+                if (auth_res.error) {
+                    return new Response(auth_res.error.msg, {
+                        status: auth_res.error.code || 401,
+                    });
+                }
+
                 const { id } = params;
-                const data = await new Response(body).json();
+                const data = await req.json();
                 const { name, uri, labels, save_to_disk, save_location } = data;
                 if (!name || !uri) {
                     return new Response("Missing name or uri", { status: 400 });
@@ -297,14 +305,28 @@ const server = Bun.serve({
                 });
                 return Response.json({ success: true });
             },
-            DELETE: async ({ params }: { params: { id: string } }) => {
+            DELETE: async (req: Request, params: { id: string }) => {
+                const auth_res = await auth_required(settings, req);
+                if (auth_res.error) {
+                    return new Response(auth_res.error.msg, {
+                        status: auth_res.error.code || 401,
+                    });
+                }
+
                 const { id } = params;
                 await deleteMedia(id);
                 return Response.json({ success: true });
             },
         },
         "/media": {
-            GET: async () => {
+            GET: async (req: Request) => {
+                const auth_res = await auth_required(settings, req);
+                if (auth_res.error) {
+                    return new Response(auth_res.error.msg, {
+                        status: auth_res.error.code || 401,
+                    });
+                }
+
                 const media = await getAllMedia();
                 media.sort((a, b) => b.updated_at - a.updated_at);
                 return Response.json(media);
@@ -346,6 +368,13 @@ const server = Bun.serve({
         },
         "/query": {
             POST: async (req: Request) => {
+                const auth_res = await auth_required(settings, req);
+                if (auth_res.error) {
+                    return new Response(auth_res.error.msg, {
+                        status: auth_res.error.code || 401,
+                    });
+                }
+
                 const body = await req.json();
 
                 if (!body.query) {
@@ -386,7 +415,13 @@ const server = Bun.serve({
             },
         },
         "/moments": {
-            GET: async () => {
+            GET: async (req: Request) => {
+                const auth_res = await auth_required(settings, req);
+                if (auth_res.error) {
+                    return new Response(auth_res.error.msg, {
+                        status: auth_res.error.code || 401,
+                    });
+                }
                 const moments = await getAllMoments();
                 // Remove sensitive path fields before sending to frontend
                 const safeMoments = moments.map(({ thumbnail_path, ...rest }) => rest);
@@ -394,8 +429,14 @@ const server = Bun.serve({
             },
         },
         "/moments/:id": {
-            GET: async ({ params }: { params: { id: string } }) => {
-                const { id } = params;
+            GET: async (req: Request & { params: { id: string } }) => {
+                const auth_res = await auth_required(settings, req);
+                if (auth_res.error) {
+                    return new Response(auth_res.error.msg, {
+                        status: auth_res.error.code || 401,
+                    });
+                }
+                const { id } = req.params;
                 const moment = await getMomentById(id);
 
                 if (!moment) {
@@ -408,8 +449,15 @@ const server = Bun.serve({
             },
         },
         "/moments/:id/thumbnail": {
-            GET: async ({ params }: { params: { id: string } }) => {
-                const { id } = params;
+            GET: async (req: Request & { params: { id: string } }) => {
+                const auth_res = await auth_required(settings, req);
+                if (auth_res.error) {
+                    return new Response(auth_res.error.msg, {
+                        status: auth_res.error.code || 401,
+                    });
+                }
+
+                const { id } = req.params;
 
                 // Fetch the moment from the database
                 const moment = await getMomentById(id);
@@ -456,8 +504,16 @@ const server = Bun.serve({
             },
         },
         "/media_units/:id/image": {
-            GET: async ({ params }: { params: { id: string } }) => {
-                const { id } = params;
+            GET: async (req: Request & { params: { id: string } }) => {
+const auth_res = await auth_required(settings, req);
+                if (auth_res.error) {
+                    return new Response(auth_res.error.msg, {
+                        status: auth_res.error.code || 401,
+                    });
+                }
+                
+
+                const { id } = req.params;
 
                 // Fetch the media unit from the database
                 const mediaUnit = await getMediaUnitById(id);
@@ -534,60 +590,20 @@ const server = Bun.serve({
             },
         },
         "/users": {
-            GET: async () => {
+            GET: async (req: Request) => {
+                const auth_res = await auth_required(settings, req);
+                if (auth_res.error) {
+                    return new Response(auth_res.error.msg, {
+                        status: auth_res.error.code || 401,
+                    });
+                }
+
                 const users = await getAllUsers();
                 const safeUsers = users.map(({ password_hash, ...rest }) => rest);
                 return Response.json(safeUsers);
             },
         },
         "/search": {
-            POST: async (req: Request) => {
-                const body = await req.json();
-                const { query } = body;
-                if (!query) {
-                    return new Response("Missing query", { status: 400 });
-                }
-
-                // Generate the embedding for the query
-
-                // Forward search request to engine
-                const response = await fetch(
-                    `https://${ENGINE_URL}/api/worker/fast_embedding`,
-                    {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            job: {
-                                text: query,
-                                prompt_name: "query",
-                            },
-                        }),
-                    }
-                );
-
-                if (!response.ok || !response.body) {
-                    throw new Error("Search request failed");
-                }
-
-                const data = await response.json();
-                const embedding: number[] = data.embedding;
-                if (!embedding) {
-                    throw new Error("No embedding returned from engine");
-                }
-
-                const media_units = await getMediaUnitsByEmbedding(embedding, {
-                    requireDescription: true,
-                });
-                // Remove sensitive path fields before sending to frontend
-                const safeMediaUnits = media_units.map(({ path, ...rest }) => rest);
-                return Response.json({ media_units: safeMediaUnits });
-            },
-        },
-        "/agents": {
-            GET: async () => {
-                const agents = await getAllAgents();
-                return Response.json(agents);
-            },
             POST: async (req: Request) => {
                 const auth_res = await auth_required(settings, req);
                 if (auth_res.error) {
@@ -596,27 +612,68 @@ const server = Bun.serve({
                     });
                 }
 
-                const body = await req.json();
-                const { name, instruction } = body;
-                if (!name || !instruction) {
-                    return new Response("Missing name or instruction", { status: 400 });
-                }
-                const id = uuid();
-                await createAgent({ id, name, instruction });
-
-                logger.info(`New agent created via API: ${name} (${id})`);
-                return Response.json({ success: true, id });
+                return new Response("Search functionality temporarily disabled", { status: 503 });
             },
         },
+        "/agents": {
+            GET: async (req: Request) => {
+                const auth_res = await auth_required(settings, req);
+                if (auth_res.error) {
+                    return new Response(auth_res.error.msg, {
+                        status: auth_res.error.code || 401,
+                    });
+                }
+
+                const agents = await getAllAgents();
+                return Response.json(agents);
+            },
+            POST: agentsPostHandler,
+        },
         "/agents/:id": {
-            DELETE: async ({ params }: { params: { id: string } }) => {
+            DELETE: async (req: Request, params: { id: string }) => {
+                const auth_res = await auth_required(settings, req);
+                if (auth_res.error) {
+                    return new Response(auth_res.error.msg, {
+                        status: auth_res.error.code || 401,
+                    });
+                }
+
                 const { id } = params;
                 await deleteAgent(id);
                 return Response.json({ success: true });
             },
         },
+        "/agents/:id/metrics": {
+            GET: async (req: Request & { params: { id: string } }) => {
+                const auth_res = await auth_required(settings, req);
+                if (auth_res.error) {
+                    return new Response(auth_res.error.msg, {
+                        status: auth_res.error.code || 401,
+                    });
+                }
+
+                const { id } = req.params;
+                const agent = await getAgentById(id);
+                console.log('Fetching metrics for agent', { agent_id: id, agent });
+                if (!agent) {
+                    return new Response("Agent not found", { status: 404 });
+                }
+
+
+                const metrics = await getMetricsByIds(agent.metric_ids || []);
+                
+                return Response.json(metrics);
+            },
+        },
         "/frame-stats": {
-            GET: async () => {
+            GET: async (req: Request) => {
+                const auth_res = await auth_required(settings, req);
+                if (auth_res.error) {
+                    return new Response(auth_res.error.msg, {
+                        status: auth_res.error.code || 401,
+                    });
+                }
+
                 return Response.json(state.frame_stats_messages);
             },
         },

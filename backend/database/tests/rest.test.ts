@@ -591,8 +591,7 @@ test("executeREST - cast json", async () => {
 });
 
 test("executeREST - cast embedding", async () => {
-    // First, insert a media unit with embedding
-    const embedding = [0.1, 0.2, 0.3, 0.4];
+    // First, create a media unit
     const mediaUnitId = crypto.randomUUID();
     await executeREST({
         type: 'insert',
@@ -602,30 +601,43 @@ test("executeREST - cast embedding", async () => {
             media_id: testMediaId,
             at_time: Date.now(),
             description: 'Test embedding',
-            embedding: embedding,
             path: '/tmp/test_embedding.jpg',
             type: 'image'
-        },
-        cast: { embedding: { type: 'embedding' } }
+        }
     });
     createdMediaUnitIds.push(mediaUnitId);
 
-    // Now select it back with cast
+    // Now insert an embedding that references the media unit
+    const embedding = [0.1, 0.2, 0.3, 0.4];
+    const embeddingId = crypto.randomUUID();
+    await executeREST({
+        type: 'insert',
+        table: 'embeddings',
+        values: {
+            id: embeddingId,
+            value: embedding,
+            type: 'test',
+            ref_key: { id: mediaUnitId }
+        },
+        cast: { value: { type: 'embedding' }, ref_key: { type: 'json' } }
+    });
+
+    // Now select the embedding back with cast
     const result = await executeREST({
-        table: 'media_units',
-        where: [{ field: 'id', op: 'equals', value: mediaUnitId }],
-        cast: { embedding: { type: 'embedding' } },
+        table: 'embeddings',
+        where: [{ field: 'id', op: 'equals', value: embeddingId }],
+        cast: { value: { type: 'embedding' }, ref_key: { type: 'json' } },
         expect: { is: 'single', value_when_no_item: undefined }
     });
 
     expect(result).toBeDefined();
-    expect(result.embedding).toBeArray();
-    expect(result.embedding).toHaveLength(4);
+    expect(result.value).toBeArray();
+    expect(result.value).toHaveLength(4);
     // Check values are approximately equal (Float32 precision)
-    expect(result.embedding[0]).toBeCloseTo(0.1, 5);
-    expect(result.embedding[1]).toBeCloseTo(0.2, 5);
-    expect(result.embedding[2]).toBeCloseTo(0.3, 5);
-    expect(result.embedding[3]).toBeCloseTo(0.4, 5);
+    expect(result.value[0]).toBeCloseTo(0.1, 5);
+    expect(result.value[1]).toBeCloseTo(0.2, 5);
+    expect(result.value[2]).toBeCloseTo(0.3, 5);
+    expect(result.value[3]).toBeCloseTo(0.4, 5);
 });
 
 

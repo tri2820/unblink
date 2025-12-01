@@ -1,28 +1,28 @@
 import { describe, it, expect } from "bun:test";
-import { parseJsonFromString } from "./dirty_json";
+import { parseDirtyJson } from "./dirty_json";
 
-describe("parseJsonFromString", () => {
+describe("parseDirtyJson", () => {
     it("should parse valid JSON object", () => {
         const input = '{"key": "value"}';
-        const result = parseJsonFromString(input);
+        const result = parseDirtyJson(input);
         expect(result).toEqual({ data: { key: "value" } });
     });
 
     it("should parse valid JSON array", () => {
         const input = '[1, 2, 3]';
-        const result = parseJsonFromString(input);
+        const result = parseDirtyJson(input);
         expect(result).toEqual({ data: [1, 2, 3] });
     });
 
     it("should extract JSON from dirty string", () => {
         const input = 'Some text before {"key": "value"} and after';
-        const result = parseJsonFromString(input);
+        const result = parseDirtyJson(input);
         expect(result).toEqual({ data: { key: "value" } });
     });
 
     it("should return error for invalid input", () => {
         const input = "not json";
-        const result = parseJsonFromString(input);
+        const result = parseDirtyJson(input);
         expect(result.error).toBeDefined();
     });
 
@@ -39,20 +39,20 @@ describe("parseJsonFromString", () => {
         }
     ]
 }`;
-        const result = parseJsonFromString(input);
+        const result = parseDirtyJson(input);
         expect(result.data).toBeDefined();
         expect(result.data.image).toHaveLength(2);
     });
 
     it("should return error for empty string", () => {
         const input = "";
-        const result = parseJsonFromString(input);
+        const result = parseDirtyJson(input);
         expect(result.error).toBe("Input must be a non-empty string.");
     });
 
     it("should return error for non-string input", () => {
         const input = 123 as any;
-        const result = parseJsonFromString(input);
+        const result = parseDirtyJson(input);
         expect(result.error).toBe("Input must be a non-empty string.");
     });
 });

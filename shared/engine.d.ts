@@ -59,26 +59,13 @@ export type WorkerOutput__MotionEnergy = {
 }
 
 // Embedding Worker
-export type WorkerInput__Embedding = ({
-    text: string;
-    prompt_name: 'query' | 'passage';
-} | {
-    filepath: ResourceRef;
-})
-
-export type WorkerOutput__Embedding = {
-    id: string;
-    embedding: number[]; // Vector of size 8192 (Jina model)
-}
-
-// Rzen Embedding Worker
-export type WorkerInput__Rzen = {
+export type WorkerInput__Embedding = {
     text?: string;
     image?: ResourceRef;
     instruction?: string;
 }
 
-export type WorkerOutput__Rzen = {
+export type WorkerOutput__Embedding = {
     id: string;
     embedding: number[]; // Vector of size 3584 (RzenEmbed model)
 }

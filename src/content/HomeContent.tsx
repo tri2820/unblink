@@ -61,7 +61,7 @@ export default function HomeContent() {
                                             <div class="flex flex-wrap gap-1">
                                                 <For each={camera.labels}>
                                                     {(label) => (
-                                                        <span class="bg-neu-700 text-neu-300 text-xs font-medium px-2.5 py-0.5 rounded whitespace-nowrap">
+                                                        <span class="bg-neu-800 text-neu-300 text-xs font-medium px-2.5 py-0.5 rounded whitespace-nowrap">
                                                             {label}
                                                         </span>
                                                     )}

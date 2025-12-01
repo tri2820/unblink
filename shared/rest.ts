@@ -18,7 +18,7 @@ export type RESTSelect = {
         };
     }[];
     where?: RESTWhereField[];
-    select?: (string | {value: string, alias?: string})[];
+    select?: (string | {expression: string, alias?: string})[];
     limit?: number;
     order_by?: {
         field: string;

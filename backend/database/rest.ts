@@ -226,8 +226,8 @@ async function handleSelect(query: RESTSelect, db: Database, schema: Record<stri
                 selectFields.push(field);
             } else {
                 // {value: string, alias: string}
-                await validateField(`${field.value} as ${field.alias}`, allowedTables);
-                selectFields.push(`${field.value} as ${field.alias}`);
+                await validateField(`${field.expression} as ${field.alias}`, allowedTables);
+                selectFields.push(`${field.expression} as ${field.alias}`);
             }
         }
         selectClause = selectFields.join(', ');

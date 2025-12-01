@@ -20,7 +20,6 @@ export async function initDatabase(client: Database) {
                 media_id TEXT NOT NULL,
                 at_time INTEGER NOT NULL,
                 description TEXT,
-                embedding BLOB,
                 path TEXT NOT NULL,
                 type TEXT NOT NULL
             );
@@ -124,7 +123,9 @@ export async function initDatabase(client: Database) {
             CREATE TABLE agents (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
-                instruction TEXT NOT NULL
+                instruction TEXT NOT NULL,
+                metric_ids TEXT,
+                objects TEXT
             );
         `);
         logger.info("Table 'agents' created.");
@@ -153,10 +154,22 @@ export async function initDatabase(client: Database) {
                 id TEXT PRIMARY KEY,
                 value BLOB NOT NULL,
                 type TEXT NOT NULL,
-                ref_id TEXT NOT NULL
+                ref_key TEXT NOT NULL
             );
         `);
         logger.info("Table 'embeddings' created.");
+    }
+
+    // Create 'metrics' table
+    if (!existingTables.has('metrics')) {
+        await client.exec(`
+            CREATE TABLE metrics (
+                id TEXT PRIMARY KEY,
+                entailment TEXT NOT NULL,
+                contradiction TEXT NOT NULL
+            );
+        `);
+        logger.info("Table 'metrics' created.");
     }
 
     // Run onboarding after all tables are created

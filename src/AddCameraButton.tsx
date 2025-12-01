@@ -21,6 +21,8 @@ export default function AddCameraButton() {
         const labelsArray = labels().split(',').map(l => l.trim()).filter(l => l);
 
         toaster.promise(async () => {
+
+            setTab({ type: 'home' }); // Redirect to home tab
             const response = await fetch('/media', {
                 method: 'POST',
                 headers: {
@@ -33,11 +35,7 @@ export default function AddCameraButton() {
                 setName('');
                 setUri('');
                 setLabels('');
-                if (tab().type === 'home') {
-                    await fetchCameras();
-                } else {
-                    setTab({ type: 'home' }); // Redirect to home tab
-                }
+                await fetchCameras();
 
 
             } else {

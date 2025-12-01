@@ -20,7 +20,6 @@ export interface MediaUnit {
     media_id: string;
     at_time: number;
     description?: string | null;
-    embedding?: Uint8Array | null; // Stored as BLOB
     path: string;
     type: string;
 }
@@ -48,6 +47,8 @@ export interface Agent {
     id: string;
     name: string;
     instruction: string;
+    metric_ids?: string[] | null;
+    objects?: string[] | null;
 }
 
 export interface AgentResponse {
@@ -73,7 +74,13 @@ export interface Moment {
 
 export interface Embedding {
     id: string;
-    value: Uint8Array; // Stored as BLOB
+    value: number[]; // Stored as BLOB, returned as number array
     type: string;
-    ref_id: string;
+    ref_key: any;
+}
+
+export interface Metric {
+    id: string;
+    entailment: string;
+    contradiction: string;
 }

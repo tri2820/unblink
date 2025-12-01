@@ -33,7 +33,6 @@ beforeAll(async () => {
         media_id: 'test-media-id',
         at_time: Date.now(),
         description: null,
-        embedding: null,
         path: '/tmp/test.jpg',
         type: 'frame'
     });

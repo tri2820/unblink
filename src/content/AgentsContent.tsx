@@ -3,6 +3,7 @@ import { FiEye } from "solid-icons/fi";
 import { authorized_as_admin, agents, agentsLoading, fetchAgents, setAgents } from "../shared";
 import LayoutContent from "./LayoutContent";
 import DeleteAgentButton from "../DeleteAgentButton";
+import MetricsButton from "../MetricsButton";
 
 export default function AgentsContent() {
     onMount(fetchAgents);
@@ -32,6 +33,9 @@ export default function AgentsContent() {
                                 <th scope="col" class="px-6 py-3 font-medium">
                                     Instruction
                                 </th>
+                                <th scope="col" class="px-6 py-3 font-medium">
+                                    Objects to Look For
+                                </th>
                                 <Show when={authorized_as_admin()}>
                                     <th scope="col" class="px-6 py-3 font-medium">
                                         Actions
@@ -49,11 +53,29 @@ export default function AgentsContent() {
                                         <td class="px-6 py-4 max-w-[40vw]">
                                             <span class="line-clamp-2 break-all">{agent.instruction}</span>
                                         </td>
+                                        <td class="px-6 py-4 max-w-[30vw]">
+                                            <div class="flex flex-wrap gap-2">
+                                                <For each={agent.objects || []}>
+                                                    {(object) => (
+                                                        <span class="px-2 py-1 bg-neu-800 text-neu-300 rounded-full text-xs">
+                                                            {object}
+                                                        </span>
+                                                    )}
+                                                </For>
+                                            </div>
+                                        </td>
                                         <Show when={authorized_as_admin()}>
                                             <td class="px-6 py-4">
-                                                <DeleteAgentButton agent={agent}>
-                                                    Delete
-                                                </DeleteAgentButton>
+                                                <div class="flex gap-2">
+
+                                                    <MetricsButton agent={agent}>
+                                                        Metrics
+                                                    </MetricsButton>
+
+                                                    <DeleteAgentButton agent={agent}>
+                                                        Delete
+                                                    </DeleteAgentButton>
+                                                </div>
                                             </td>
                                         </Show>
                                     </tr>

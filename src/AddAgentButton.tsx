@@ -38,6 +38,7 @@ export default function AddAgentButton() {
         }
 
         toaster.promise(async () => {
+            setTab({ type: 'agents' }); // Redirect to agents tab
             const response = await fetch('/agents', {
                 method: 'POST',
                 headers: {
@@ -49,26 +50,22 @@ export default function AddAgentButton() {
             if (response.ok) {
                 setName('');
                 setInstruction('');
-                if (tab().type === 'agents') {
-                    await fetchAgents(); // Refetch agents after successful creation
-                } else {
-                    setTab({ type: 'agents' }); // Redirect to agents tab
-                }
+                await fetchAgents(); // Refetch agents after successful creation
             } else {
-                throw new Error('Failed to save agent');
+                throw new Error('Failed to create agent');
             }
         }, {
             loading: {
-                title: 'Saving...',
-                description: 'Your agent is being added.',
+                title: 'Creating...',
+                description: 'Your agent is being created.',
             },
             success: {
                 title: 'Success!',
-                description: 'Agent has been added successfully.',
+                description: 'Agent has been created successfully.',
             },
             error: {
                 title: 'Failed',
-                description: 'There was an error adding your agent. Please try again.',
+                description: 'There was an error creating your agent. Please try again.',
             },
         })
     };

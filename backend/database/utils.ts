@@ -1,5 +1,5 @@
 import type { RESTWhereField } from '~/shared';
-import type { Agent, AgentResponse, Embedding, Media, MediaUnit, Moment, Secret, Session, Setting, User } from '~/shared/database';
+import type { Agent, AgentResponse, Embedding, Media, MediaUnit, Moment, Secret, Session, Setting, User, Metric } from '~/shared/database';
 
 
 import { executeREST } from './rest';
@@ -136,11 +136,9 @@ export async function createMediaUnit(mediaUnit: MediaUnit) {
             media_id: mediaUnit.media_id,
             at_time: mediaUnit.at_time,
             description: mediaUnit.description || null,
-            embedding: mediaUnit.embedding || null,
             path: mediaUnit.path,
             type: mediaUnit.type
-        },
-        cast: mediaUnit.embedding ? { embedding: { type: 'embedding' } } : undefined
+        }
     });
 }
 
@@ -148,8 +146,7 @@ export async function getMediaUnitById(id: string): Promise<MediaUnit | undefine
     return await executeREST({
         table: 'media_units',
         where: [{ field: 'id', op: 'equals', value: id }],
-        expect: { is: 'single', value_when_no_item: undefined },
-        cast: { embedding: { type: 'embedding' } }
+        expect: { is: 'single', value_when_no_item: undefined }
     });
 }
 
@@ -158,8 +155,7 @@ export async function getMediaUnitsByMediaId(mediaId: string): Promise<MediaUnit
         table: 'media_units',
         where: [{ field: 'media_id', op: 'equals', value: mediaId }],
         order_by: { field: 'at_time', direction: 'ASC' },
-        limit: 1000,
-        cast: { embedding: { type: 'embedding' } }
+        limit: 1000
     });
     return rows as MediaUnit[];
 }
@@ -172,8 +168,7 @@ export async function updateMediaUnit(id: string, updates: Partial<Omit<MediaUni
         type: 'update',
         table: 'media_units',
         where: [{ field: 'id', op: 'equals', value: id }],
-        values: updates,
-        cast: updates.embedding ? { embedding: { type: 'embedding' } } : undefined
+        values: updates
     });
 }
 
@@ -375,34 +370,34 @@ export async function getAllSessions(): Promise<Session[]> {
     return rows.map(processSessionRow);
 }
 
-// Function to get media units by embedding (for similarity search)
-export async function getMediaUnitsByEmbedding(queryEmbedding: number[], options?: { requireDescription?: boolean }): Promise<(Omit<MediaUnit, 'embedding'> & { distance: number })[]> {
-    const whereConditions: RESTWhereField[] = [
-        { field: 'embedding', op: 'is_not', value: null }
-    ];
+// Function to find similar embeddings using vector similarity search
+export async function getEmbeddingsBySimilarity(queryEmbedding: number[], types?: string[], limit: number = 20): Promise<(Embedding & { distance: number })[]> {
+    const whereConditions: RESTWhereField[] = [];
 
-    if (options?.requireDescription) {
-        whereConditions.push({ field: 'description', op: 'is_not', value: null });
+    if (types && types.length > 0) {
+        if (types.length === 1) {
+            whereConditions.push({ field: 'type', op: 'equals', value: types[0] });
+        } else {
+            whereConditions.push({ field: 'type', op: 'in', value: types });
+        }
     }
 
     const vectorStr = `[${queryEmbedding.join(',')}]`;
     const rows = await executeREST({
-        table: 'media_units',
+        table: 'embeddings',
         select: [
             'id',
-            'media_id', 
-            'at_time',
-            'description',
-            'path',
+            'value',
             'type',
-            { value: `vector_distance_cos(embedding, vector32('${vectorStr}'))`, alias: 'distance' }
+            'ref_key',
+            { expression: `vector_distance_cos(value, vector32('${vectorStr}'))`, alias: 'distance' }
         ],
         where: whereConditions,
         order_by: { field: 'distance', direction: 'ASC' }, // ASC because lower distance = higher similarity
-        limit: 20,
-        cast: { embedding: { type: 'embedding' } }
+        limit: limit,
+        cast: { value: { type: 'embedding' }, ref_key: { type: 'json' } }
     });
-    return rows;
+    return rows as (Embedding & { distance: number })[];
 }
 
 export async function getMediaUnitsByIds(ids: string[]): Promise<MediaUnit[]> {
@@ -410,8 +405,7 @@ export async function getMediaUnitsByIds(ids: string[]): Promise<MediaUnit[]> {
     const rows = await executeREST({
         table: 'media_units',
         where: [{ field: 'id', op: 'in', value: ids }],
-        limit: ids.length,
-        cast: { embedding: { type: 'embedding' } }
+        limit: ids.length
     });
     return rows as MediaUnit[];
 }
@@ -425,8 +419,7 @@ export async function getFirstMediaUnitInTimeRange(mediaId: string, startTime: n
             { field: 'at_time', op: 'lte', value: endTime }
         ],
         order_by: { field: 'at_time', direction: 'ASC' },
-        expect: { is: 'single', value_when_no_item: undefined },
-        cast: { embedding: { type: 'embedding' } }
+        expect: { is: 'single', value_when_no_item: undefined }
     });
 }
 
@@ -440,8 +433,7 @@ export async function getDescribedMediaUnitsInTimeRange(mediaId: string, startTi
             { field: 'description', op: 'is_not', value: null }
         ],
         order_by: { field: 'at_time', direction: 'ASC' },
-        limit: 1000,
-        cast: { embedding: { type: 'embedding' } }
+        limit: 1000
     });
     return rows as MediaUnit[];
 }
@@ -520,8 +512,11 @@ export async function createAgent(agent: Agent): Promise<void> {
         values: {
             id: agent.id,
             name: agent.name,
-            instruction: agent.instruction
-        }
+            instruction: agent.instruction,
+            metric_ids: agent.metric_ids || null,
+            objects: agent.objects || null
+        },
+        cast: { metric_ids: { type: 'json' }, objects: { type: 'json' } }
     });
 }
 
@@ -529,7 +524,8 @@ export async function getAgentById(id: string): Promise<Agent | undefined> {
     return await executeREST({
         table: 'agents',
         where: [{ field: 'id', op: 'equals', value: id }],
-        expect: { is: 'single', value_when_no_item: undefined }
+        expect: { is: 'single', value_when_no_item: undefined },
+        cast: { metric_ids: { type: 'json', default: [] }, objects: { type: 'json', default: [] } }
     });
 }
 
@@ -537,14 +533,16 @@ export async function getAgentByName(name: string): Promise<Agent | undefined> {
     return await executeREST({
         table: 'agents',
         where: [{ field: 'name', op: 'equals', value: name }],
-        expect: { is: 'single', value_when_no_item: undefined }
+        expect: { is: 'single', value_when_no_item: undefined },
+        cast: { metric_ids: { type: 'json', default: [] }, objects: { type: 'json', default: [] } }
     });
 }
 
 export async function getAllAgents(): Promise<Agent[]> {
     const rows = await executeREST({
         table: 'agents',
-        limit: 100
+        limit: 100,
+        cast: { metric_ids: { type: 'json', default: [] }, objects: { type: 'json', default: [] } }
     });
     return rows as Agent[];
 }
@@ -557,7 +555,8 @@ export async function updateAgent(id: string, updates: Partial<Omit<Agent, 'id'>
         type: 'update',
         table: 'agents',
         where: [{ field: 'id', op: 'equals', value: id }],
-        values: updates
+        values: updates,
+        cast: { metric_ids: { type: 'json' }, objects: { type: 'json' } }
     });
 }
 
@@ -638,9 +637,9 @@ export async function createEmbedding(embedding: Embedding): Promise<void> {
             id: embedding.id,
             value: embedding.value,
             type: embedding.type,
-            ref_id: embedding.ref_id
+            ref_key: embedding.ref_key
         },
-        cast: { value: { type: 'embedding' } }
+        cast: { value: { type: 'embedding' }, ref_key: { type: 'json' } }
     });
 }
 
@@ -649,7 +648,7 @@ export async function getEmbeddingById(id: string): Promise<Embedding | undefine
         table: 'embeddings',
         where: [{ field: 'id', op: 'equals', value: id }],
         expect: { is: 'single', value_when_no_item: undefined },
-        cast: { value: { type: 'embedding' } }
+        cast: { value: { type: 'embedding' }, ref_key: { type: 'json' } }
     });
 }
 
@@ -658,7 +657,7 @@ export async function getEmbeddingsByType(type: string): Promise<Embedding[]> {
         table: 'embeddings',
         where: [{ field: 'type', op: 'equals', value: type }],
         limit: 100,
-        cast: { value: { type: 'embedding' } }
+        cast: { value: { type: 'embedding' }, ref_key: { type: 'json' } }
     });
     return rows as Embedding[];
 }
@@ -666,9 +665,9 @@ export async function getEmbeddingsByType(type: string): Promise<Embedding[]> {
 export async function getEmbeddingsByRefId(refId: string): Promise<Embedding[]> {
     const rows = await executeREST({
         table: 'embeddings',
-        where: [{ field: 'ref_id', op: 'equals', value: refId }],
+        where: [{ field: 'ref_key', op: 'json_extract', value: refId, json_path: 'id' }],
         limit: 100,
-        cast: { value: { type: 'embedding' } }
+        cast: { value: { type: 'embedding' }, ref_key: { type: 'json' } }
     });
     return rows as Embedding[];
 }
@@ -677,7 +676,7 @@ export async function getAllEmbeddings(): Promise<Embedding[]> {
     const rows = await executeREST({
         table: 'embeddings',
         limit: 1000,
-        cast: { value: { type: 'embedding' } }
+        cast: { value: { type: 'embedding' }, ref_key: { type: 'json' } }
     });
     return rows as Embedding[];
 }
@@ -691,7 +690,7 @@ export async function updateEmbedding(id: string, updates: Partial<Omit<Embeddin
         table: 'embeddings',
         where: [{ field: 'id', op: 'equals', value: id }],
         values: updates,
-        cast: updates.value ? { value: { type: 'embedding' } } : undefined
+        cast: updates.value ? { value: { type: 'embedding' }, ref_key: { type: 'json' } } : { ref_key: { type: 'json' } }
     });
 }
 
@@ -701,4 +700,82 @@ export async function deleteEmbedding(id: string): Promise<void> {
         table: 'embeddings',
         where: [{ field: 'id', op: 'equals', value: id }]
     });
+}
+
+// Metric utilities
+export async function createMetric(metric: Metric): Promise<void> {
+    await executeREST({
+        type: 'insert',
+        table: 'metrics',
+        values: {
+            id: metric.id,
+            entailment: metric.entailment,
+            contradiction: metric.contradiction
+        }
+    });
+}
+
+export async function getMetricById(id: string): Promise<Metric | undefined> {
+    return await executeREST({
+        table: 'metrics',
+        where: [{ field: 'id', op: 'equals', value: id }],
+        expect: { is: 'single', value_when_no_item: undefined }
+    });
+}
+
+export async function getAllMetrics(): Promise<Metric[]> {
+    const rows = await executeREST({
+        table: 'metrics',
+        limit: 100
+    });
+    return rows as Metric[];
+}
+
+export async function updateMetric(id: string, updates: Partial<Omit<Metric, 'id'>>): Promise<void> {
+    const fields = Object.keys(updates);
+    if (fields.length === 0) return;
+
+    await executeREST({
+        type: 'update',
+        table: 'metrics',
+        where: [{ field: 'id', op: 'equals', value: id }],
+        values: updates
+    });
+}
+
+export async function deleteMetric(id: string): Promise<void> {
+    await executeREST({
+        type: 'delete',
+        table: 'metrics',
+        where: [{ field: 'id', op: 'equals', value: id }]
+    });
+}
+
+export async function getMetricsByIds(ids: string[]): Promise<Metric[]> {
+    if (ids.length === 0) return [];
+    const rows = await executeREST({
+        table: 'metrics',
+        where: [{ field: 'id', op: 'in', value: ids }],
+        limit: ids.length
+    });
+    return rows as Metric[];
+}
+
+/**
+ * Get a single embedding by reference ID and type
+ * @param refId The reference ID (e.g., metric ID)
+ * @param embeddingType The embedding type (e.g., 'metric_entailment', 'metric_contradiction')
+ * @returns The embedding or undefined if not found
+ */
+export async function getEmbeddingByRefAndType(refId: string, embeddingType: string): Promise<Embedding | undefined> {
+    const rows = await executeREST({
+        table: 'embeddings',
+        where: [
+            { field: 'ref_key', op: 'json_extract', value: refId, json_path: 'metric_id' },
+            { field: 'type', op: 'equals', value: embeddingType }
+        ],
+        expect: { is: 'single', value_when_no_item: undefined },
+        cast: { value: { type: 'embedding' }, ref_key: { type: 'json' } }
+    });
+    return rows as Embedding | undefined;
 }

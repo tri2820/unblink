@@ -19,7 +19,7 @@ type ParseResult = { data: any; error?: undefined } | { error: string; data?: un
  * @returns An object with a `data` key containing the parsed JSON if successful,
  *          or an `error` key with a message if parsing fails.
  */
-export function parseJsonFromString(text: string): ParseResult {
+export function parseDirtyJson(text: string): ParseResult {
     if (!text || typeof text !== 'string') {
         return { error: "Input must be a non-empty string." };
     }
