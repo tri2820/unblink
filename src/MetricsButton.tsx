@@ -58,6 +58,7 @@ export default function MetricsButton(props: { agent: Agent, children: any }) {
                         {(metric) => (
                             <div class="p-3 bg-neu-800 rounded-md border border-neu-700">
                                 <p class="text-neu-200 text-sm">{metric.entailment}</p>
+                                <p class="text-neu-200 text-sm">{metric.contradiction}</p>
                             </div>
                         )}
                     </For>

@@ -114,3 +114,10 @@ export function normalize(a: number[]): number[] {
   }
   return result;
 }
+
+// Helper: Softmax to convert scores to probabilities
+export function softmax(scores: number[], temperature: number = 0.1): number[] {
+    const exponents = scores.map(score => Math.exp(score / temperature));
+    const sumExponents = exponents.reduce((a, b) => a + b, 0);
+    return exponents.map(exp => exp / sumExponents);
+}

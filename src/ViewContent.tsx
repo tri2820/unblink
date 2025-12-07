@@ -1,5 +1,5 @@
 import { For, Show, createEffect, createSignal, onCleanup } from "solid-js";
-import ActivityBar from "./ActivityBar";
+import StatsBar from "./StatsBar";
 import CanvasVideo from "./CanvasVideo";
 import ConfigureViewDialog from "./ConfigureViewDialog";
 import { cameras, setSubscription, settings, viewedMedias } from "./shared";
@@ -20,6 +20,7 @@ const chunk = <T,>(arr: T[]): T[][] => {
 
 export default function ViewContent() {
     const [showDetections, setShowDetections] = createSignal(true);
+    const [showStatsBar, setShowStatsBar] = createSignal(true);
 
     // Handle subscriptions
     createEffect(() => {
@@ -70,7 +71,11 @@ export default function ViewContent() {
                                     <ConfigureViewDialog
                                         disabled={settings()['object_detection_enabled'] !== 'true'}
                                         showDetections={showDetections}
-                                        onSave={(s) => setShowDetections(s.showDetections)}
+                                        showStatsBar={showStatsBar}
+                                        onSave={(s) => {
+                                            setShowDetections(s.showDetections);
+                                            setShowStatsBar(s.showStatsBar);
+                                        }}
                                     />
                                 </div>
 
@@ -108,7 +113,9 @@ export default function ViewContent() {
                     </Show>
                 </div>
 
-                <ActivityBar viewedMedias={viewedMedias} cameras={cameras} />
+                <Show when={showStatsBar()}>
+                    <StatsBar viewedMedias={viewedMedias} cameras={cameras} />
+                </Show>
             </div>
 
             <agentBar.Comp />

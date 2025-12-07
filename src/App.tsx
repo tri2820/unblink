@@ -16,7 +16,7 @@ import SideBar from './SideBar';
 import { connectWebSocket, newMessage } from './video/connection';
 import ViewContent from './ViewContent';
 
-const MAX_MOTION_MESSAGES_LENGTH_EACH = 100;
+const MAX_STATS_LENGTH_EACH = 200;
 
 export default function App() {
 
@@ -38,7 +38,7 @@ export default function App() {
 
             // Keep only last 100 messages per stream
             for (const mediaId in messagesByStream) {
-                messagesByStream[mediaId] = messagesByStream[mediaId]!.slice(-MAX_MOTION_MESSAGES_LENGTH_EACH);
+                messagesByStream[mediaId] = messagesByStream[mediaId]!.slice(-MAX_STATS_LENGTH_EACH);
             }
 
             setStatsMessages(messagesByStream);
@@ -56,8 +56,16 @@ export default function App() {
             const mediaId = m.media_id;
             setStatsMessages(mediaId, (prev = []) => {
                 const updated = [...prev, m];
-                return updated.slice(-MAX_MOTION_MESSAGES_LENGTH_EACH);
+                return updated.slice(-MAX_STATS_LENGTH_EACH);
             });
+
+            // Log agent scores received (for debugging)
+            const agentStats = Object.keys(m.stats).filter(key => key.startsWith('agent_'));
+            if (agentStats.length > 0) {
+                console.log(`Received agent scores for ${mediaId}:`, 
+                    Object.fromEntries(agentStats.map(key => [key, m.stats[key]]))
+                );
+            }
         }
     });
 

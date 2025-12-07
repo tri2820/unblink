@@ -161,3 +161,24 @@ export type WorkerOutput__Segmentation = ({
     cross_job_id: string;
     error: string;
 }
+
+// Streaming VLM Worker (Real-time Video Commentary)
+export type WorkerInput__StreamingVlm = {
+    stream_id: string; // Stream identifier (maintains separate memory per stream)
+    frames: ResourceRef[]; // Frame image references (variable count per chunk)
+    timestamp_sec: number; // Chunk start time in seconds (REQUIRED, must be >= 0)
+    duration_sec: number; // Chunk duration in seconds (REQUIRED, must be > 0)
+    query?: string; // Optional custom query prompt (only used on first chunk)
+}
+
+export type WorkerOutput__StreamingVlm = {
+    id: string;
+    stream_id: string;
+    response: string; // Generated commentary
+    start_time: number; // Start time of processed chunk
+    end_time: number; // End time of processed chunk
+    kv_length: number; // Current KV cache length
+    chunk_count: number; // Total chunks processed for this stream
+    processing_time: number; // Time taken to process (seconds)
+    error?: string; // Error message if failed
+}

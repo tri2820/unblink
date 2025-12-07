@@ -36,7 +36,7 @@ async function summarizeMoment(
     reqBuilder.add_resources(image_resources);
     const read_promise = reqBuilder.add_job<WorkerInput__Caption, WorkerOutput__Caption>('caption', {
         images: image_resources.map(r => ({ __type: 'resource-ref' as const, id: r.id })),
-        query: 'Describe the activities and events happening in these consecutive camera frames, focusing on any abnormal behavior or notable actions. Pinpoint each individual and object. Pay attention to movements, interactions, and any unusual occurrences, like something entering or leaving the scene or possible safety concerns.'
+        query: 'Describe the activities and events happening in this camera footage, focusing on any notable actions. Pinpoint each individual and object. Pay attention to movements, interactions, and any unusual occurrences, like something entering or leaving the scene or possible concerns.'
         // messages: [
         //     {
         //         role: 'system',
@@ -75,9 +75,9 @@ async function summarizeMoment(
             },
             {
                 role: 'user',
-                content: `Based on this security camera observation, create a JSON response with two fields:
-1. "title": A clear, concise title with SUBJECT and ACTION (e.g., "Person loitering near entrance", "Vehicle blocking driveway", "Package left unattended"). Focus on abnormal or notable behavior.
-2. "description": A detailed description of what was observed, including context and any concerns.
+                content: `Based on this observation, create a JSON response with two fields:
+1. "title": A clear, concise title with SUBJECT and ACTION (e.g., "Person _ near _", "Vehicle _", "Package _"). Focus on notable behavior.
+2. "description": A detailed description of what was observed, including context.
 
 Observation:
 ${read_output.response}

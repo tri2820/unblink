@@ -3,6 +3,10 @@ import type { Agent, AgentResponse, Embedding, Media, MediaUnit, Moment, Secret,
 
 
 import { executeREST } from './rest';
+import { DatabaseCache } from './cache';
+
+// Global cache instance
+const dbCache = new DatabaseCache();
 
 // Media utilities
 export async function getMediaById(id: string): Promise<Media | undefined> {
@@ -518,6 +522,9 @@ export async function createAgent(agent: Agent): Promise<void> {
         },
         cast: { metric_ids: { type: 'json' }, objects: { type: 'json' } }
     });
+
+    // Invalidate cache
+    dbCache.delete('agents:all');
 }
 
 export async function getAgentById(id: string): Promise<Agent | undefined> {
@@ -539,12 +546,21 @@ export async function getAgentByName(name: string): Promise<Agent | undefined> {
 }
 
 export async function getAllAgents(): Promise<Agent[]> {
+    const cacheKey = 'agents:all';
+    const cached = dbCache.get<Agent[]>(cacheKey);
+    if (cached) {
+        return cached;
+    }
+
     const rows = await executeREST({
         table: 'agents',
         limit: 100,
         cast: { metric_ids: { type: 'json', default: [] }, objects: { type: 'json', default: [] } }
     });
-    return rows as Agent[];
+
+    const agents = rows as Agent[];
+    dbCache.set(cacheKey, agents);
+    return agents;
 }
 
 export async function updateAgent(id: string, updates: Partial<Omit<Agent, 'id'>>): Promise<void> {
@@ -558,6 +574,9 @@ export async function updateAgent(id: string, updates: Partial<Omit<Agent, 'id'>
         values: updates,
         cast: { metric_ids: { type: 'json' }, objects: { type: 'json' } }
     });
+
+    // Invalidate cache
+    dbCache.delete('agents:all');
 }
 
 export async function deleteAgent(id: string): Promise<void> {
@@ -566,6 +585,9 @@ export async function deleteAgent(id: string): Promise<void> {
         table: 'agents',
         where: [{ field: 'id', op: 'equals', value: id }]
     });
+
+    // Invalidate cache
+    dbCache.delete('agents:all');
 }
 
 // Agent Response functions
@@ -641,6 +663,15 @@ export async function createEmbedding(embedding: Embedding): Promise<void> {
         },
         cast: { value: { type: 'embedding' }, ref_key: { type: 'json' } }
     });
+
+    // Invalidate specific embedding cache entry
+    // For metric embeddings, clear cache for the specific metric_id:type combination
+    if (embedding.ref_key && typeof embedding.ref_key === 'object' && 'metric_id' in embedding.ref_key) {
+        const refId = (embedding.ref_key as any).metric_id;
+        if (refId) {
+            dbCache.delete(`embeddings:${refId}:${embedding.type}`);
+        }
+    }
 }
 
 export async function getEmbeddingById(id: string): Promise<Embedding | undefined> {
@@ -692,14 +723,35 @@ export async function updateEmbedding(id: string, updates: Partial<Omit<Embeddin
         values: updates,
         cast: updates.value ? { value: { type: 'embedding' }, ref_key: { type: 'json' } } : { ref_key: { type: 'json' } }
     });
+
+    // Invalidate specific embedding cache entry
+    // Look up the embedding to get its ref_key and type
+    const embedding = await getEmbeddingById(id);
+    if (embedding && embedding.ref_key && typeof embedding.ref_key === 'object' && 'metric_id' in embedding.ref_key) {
+        const refId = (embedding.ref_key as any).metric_id;
+        if (refId) {
+            dbCache.delete(`embeddings:${refId}:${embedding.type}`);
+        }
+    }
 }
 
 export async function deleteEmbedding(id: string): Promise<void> {
+    // Look up the embedding before deleting to get cache invalidation info
+    const embedding = await getEmbeddingById(id);
+    
     await executeREST({
         type: 'delete',
         table: 'embeddings',
         where: [{ field: 'id', op: 'equals', value: id }]
     });
+
+    // Invalidate specific embedding cache entry
+    if (embedding && embedding.ref_key && typeof embedding.ref_key === 'object' && 'metric_id' in embedding.ref_key) {
+        const refId = (embedding.ref_key as any).metric_id;
+        if (refId) {
+            dbCache.delete(`embeddings:${refId}:${embedding.type}`);
+        }
+    }
 }
 
 // Metric utilities
@@ -741,6 +793,12 @@ export async function updateMetric(id: string, updates: Partial<Omit<Metric, 'id
         where: [{ field: 'id', op: 'equals', value: id }],
         values: updates
     });
+
+    // Invalidate cache for this metric
+    dbCache.delete(`metrics:${id}`);
+    // Also clear embedding cache for this specific metric
+    dbCache.delete(`embeddings:${id}:metric_entailment`);
+    dbCache.delete(`embeddings:${id}:metric_contradiction`);
 }
 
 export async function deleteMetric(id: string): Promise<void> {
@@ -749,16 +807,51 @@ export async function deleteMetric(id: string): Promise<void> {
         table: 'metrics',
         where: [{ field: 'id', op: 'equals', value: id }]
     });
+
+    // Invalidate cache for this metric
+    dbCache.delete(`metrics:${id}`);
+    // Also clear embedding cache for this specific metric
+    dbCache.delete(`embeddings:${id}:metric_entailment`);
+    dbCache.delete(`embeddings:${id}:metric_contradiction`);
 }
 
 export async function getMetricsByIds(ids: string[]): Promise<Metric[]> {
     if (ids.length === 0) return [];
+
+    // Check if all requested metrics are in cache
+    const cachedMetrics: Metric[] = [];
+    const missingIds: string[] = [];
+
+    for (const id of ids) {
+        const cached = dbCache.get<Metric>(`metrics:${id}`);
+        if (cached) {
+            cachedMetrics.push(cached);
+        } else {
+            missingIds.push(id);
+        }
+    }
+
+    // If all metrics are cached, return them
+    if (missingIds.length === 0) {
+        return cachedMetrics;
+    }
+
+    // Fetch missing metrics from database
     const rows = await executeREST({
         table: 'metrics',
-        where: [{ field: 'id', op: 'in', value: ids }],
-        limit: ids.length
+        where: [{ field: 'id', op: 'in', value: missingIds }],
+        limit: missingIds.length
     });
-    return rows as Metric[];
+
+    const fetchedMetrics = rows as Metric[];
+
+    // Cache the fetched metrics
+    for (const metric of fetchedMetrics) {
+        dbCache.set(`metrics:${metric.id}`, metric);
+    }
+
+    // Return all metrics (cached + fetched)
+    return [...cachedMetrics, ...fetchedMetrics];
 }
 
 /**
@@ -768,6 +861,14 @@ export async function getMetricsByIds(ids: string[]): Promise<Metric[]> {
  * @returns The embedding or undefined if not found
  */
 export async function getEmbeddingByRefAndType(refId: string, embeddingType: string): Promise<Embedding | undefined> {
+    const cacheKey = `embeddings:${refId}:${embeddingType}`;
+
+    // Check cache first
+    const cached = dbCache.get<Embedding>(cacheKey);
+    if (cached !== undefined) {
+        return cached;
+    }
+
     const rows = await executeREST({
         table: 'embeddings',
         where: [
@@ -777,5 +878,12 @@ export async function getEmbeddingByRefAndType(refId: string, embeddingType: str
         expect: { is: 'single', value_when_no_item: undefined },
         cast: { value: { type: 'embedding' }, ref_key: { type: 'json' } }
     });
-    return rows as Embedding | undefined;
+
+    const embedding = rows as Embedding | undefined;
+
+    // Cache the result only if found (don't cache undefined to allow for future creation)
+    if (embedding !== undefined) {
+        dbCache.set(cacheKey, embedding);
+    }
+    return embedding;
 }

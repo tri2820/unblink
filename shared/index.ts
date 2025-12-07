@@ -20,9 +20,7 @@ export type FrameStatsMessage = {
     type: "frame_stats";
     media_id: string;
     frame_id: string;
-    motion_energy: number;
-    sma10: number;
-    sma100: number;
+    stats: Record<string, { value: number; sma10: number; sma100: number }>;
     timestamp: number; // Unix timestamp in milliseconds
 }
 

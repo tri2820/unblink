@@ -43,29 +43,22 @@ import {
 import homepage from "./index.html";
 import type {
     ClientToServerMessage,
+    FrameStatsMessage,
     RESTQuery,
 } from "./shared";
 import { type RemoteJob, type Resource, type WorkerRequest } from "./shared/engine";
+import { type StreamStats } from "./backend/utils/frame_stats";
 
 type ServerEphemeralState = {
     remote_worker_jobs_cont: Map<string, (output: any) => void>
-    frame_stats_messages: import("./shared").FrameStatsMessage[];
-    stream_stats_map: Map<string, {
-        last10: number[];
-        last100: number[];
-        deviationState: {
-            active: boolean;
-            startTimestamp: number;
-            startFrameId: string;
-            frameIds: string[];
-            peakDeviation: number;
-            consecutiveAboveCount: number;
-            consecutiveBelowCount: number;
-        };
-    }>;
+    frame_stats_messages: FrameStatsMessage[];
+    stream_stats_map: Map<string, StreamStats>;
     active_moments: Set<string>;
     moment_frames: Map<string, { id: string, at_time: number, data: Uint8Array }[]>;
     current_moment_ids: Map<string, string>; // media_id -> moment_id for active moments
+    agent_scores: Map<string, Map<string, number>>; // media_id -> agent_id -> score
+    stream_start_times: Map<string, number>; // media_id -> start timestamp in milliseconds
+    streaming_vlm_state: Map<string, { id: string; data: Uint8Array; timestamp: number }[]>; // media_id -> accumulated frames
 };
 
 export type { ServerEphemeralState };
@@ -98,6 +91,9 @@ const state: ServerEphemeralState = {
     active_moments: new Set(),
     moment_frames: new Map(),
     current_moment_ids: new Map(),
+    agent_scores: new Map(),
+    stream_start_times: new Map(),
+    streaming_vlm_state: new Map(),
 };
 
 export type RequestBuilder = {

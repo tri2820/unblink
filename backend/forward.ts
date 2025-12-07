@@ -77,22 +77,19 @@ export const createForwardFunction = (opts: ForwardingOpts) => {
             maybeInitState(decoded.id)
             const now = Date.now();
 
+            // Initialize stream start time if not already set
+            if (!opts.state().stream_start_times.has(decoded.id)) {
+                opts.state().stream_start_times.set(decoded.id, now);
+            }
+
             const reqBuilder = createRequestBuilder()
-            reqBuilder.add_resource({
-                id: media_unit_id,
-                type: 'image',
-                data: decoded.data
-            })
 
             const builders = create_builders(opts)
             for (const [builder_id, builder] of Object.entries(builders)) {
                 const last_time_run = state.streams[decoded.id]![builder_id] ?? 0;
                 const time_since_last_run = now - last_time_run;
-                
-                if (!builder.should_run({ in_moment, last_time_run })) {
-                    // logger.debug({ builder_id, in_moment, last_time_run }, 'Builder should_run returned false');
-                    continue;
-                }
+
+
                 if (time_since_last_run < builder.interval) {
                     // logger.debug({ 
                     //     builder_id, 
@@ -102,18 +99,42 @@ export const createForwardFunction = (opts: ForwardingOpts) => {
                     // }, 'Builder skipped due to interval throttling');
                     continue;
                 }
-                
+
+                if (!builder.should_run({ in_moment, last_time_run, media_unit_id, media_id: decoded.id, data: decoded.data })) {
+                    // logger.debug({ builder_id, in_moment, last_time_run }, 'Builder should_run returned false');
+                    continue;
+                }
+
                 logger.debug({ builder_id, time_since_last_run }, 'Running builder');
                 state.streams[decoded.id]![builder_id] = now;
+
                 await builder.write?.(decoded.id, media_unit_id, decoded.data)
                 for (const worker_type of builder.worker_types) {
-                    await builder.build({ reqBuilder,  worker_type, media_id: decoded.id, media_unit_id });
+                    await builder.build({ reqBuilder, worker_type, media_id: decoded.id, media_unit_id, data: decoded.data });
                 }
             }
 
-            // if (reqBuilder.req.jobs.length > 0) {
-            //     console.log("Sending request to workers", reqBuilder);
-            // }
+            // Add current frame resource
+            reqBuilder.add_resource({
+                id: media_unit_id,
+                type: 'image',
+                data: decoded.data
+            });
+
+            // Deduplicate resources by ID
+            if (reqBuilder.req.resources) {
+                const seen = new Set<string>();
+                reqBuilder.req.resources = reqBuilder.req.resources.filter(resource => {
+                    if (seen.has(resource.id)) {
+                        return false;
+                    }
+                    seen.add(resource.id);
+                    return true;
+                });
+            }
+
+
+
             reqBuilder.send()
 
             // Buffer frames for moment enrichment

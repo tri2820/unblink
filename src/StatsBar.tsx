@@ -1,9 +1,8 @@
 import { createResizeObserver } from "@solid-primitives/resize-observer";
 import { Tooltip } from "@ark-ui/solid/tooltip";
-import { FaSolidEye, FaSolidEyeSlash } from "solid-icons/fa";
 import { createEffect, createSignal, For, Show, createMemo } from "solid-js";
 import type { FrameStatsMessage } from "~/shared";
-import { statsMessages } from "./shared";
+import { statsMessages, agents } from "./shared";
 import { getStreamColor } from "./utils/colors";
 import { ArkSelect, type SelectItem } from "./ark/ArkSelect";
 
@@ -182,7 +181,6 @@ export default function StatsBar(props: {
     }[];
     cameras: () => { id: string; name: string }[];
 }) {
-    const [show, setShow] = createSignal(true);
     const [tooltipOpen, setTooltipOpen] = createSignal(false);
     const [selectedStatType, setSelectedStatType] = createSignal('motion_energy');
 
@@ -200,12 +198,23 @@ export default function StatsBar(props: {
             }
         }
 
-        return Array.from(allStatTypes).map(statType => ({
-            label: statType === 'motion_energy' ? 'Motion Energy' : 
-                   statType.startsWith('agent_') ? `Agent ${statType.replace('agent_', '')}` : 
-                   statType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-            value: statType
-        })).sort((a, b) => {
+        return Array.from(allStatTypes).map(statType => {
+            let label: string;
+            if (statType === 'motion_energy') {
+                label = 'Motion Energy';
+            } else if (statType.startsWith('agent_')) {
+                const agentId = statType.replace('agent_', '');
+                const agent = agents().find(a => a.id === agentId);
+                label = agent ? `Agent: ${agent.name}` : `Agent ${agentId}`;
+            } else {
+                label = statType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            }
+
+            return {
+                label,
+                value: statType
+            };
+        }).sort((a, b) => {
             // Sort with motion_energy first, then agents, then others
             if (a.value === 'motion_energy') return -1;
             if (b.value === 'motion_energy') return 1;
@@ -246,34 +255,19 @@ export default function StatsBar(props: {
         >
             <Tooltip.Trigger class="relative mr-2 mb-2">
                 <div class="relative w-full h-full">
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            setShow(p => !p);
-                        }}
-                        data-show={show()}
-                        class="btn-small data-[show=true]:absolute top-1.5 left-1.5 z-20">
-                        <Show when={show()} fallback={<FaSolidEyeSlash class="w-4 h-4 " />}>
-                            <FaSolidEye class="w-4 h-4 " />
-                        </Show>
-                        <div>Stats</div>
-                    </button>
-
-                    <Show when={show()}>
-                        <div class="absolute top-1.5 right-1.5 z-20">
-                            <ArkSelect
-                                items={statTypeOptions()}
-                                value={selectedStatType}
-                                onValueChange={(details) => setSelectedStatType(details.value[0] || 'motion_energy')}
-                                placeholder="Select stat type"
-                            />
-                        </div>
-                        <StatsCanvas 
-                            viewedMedias={props.viewedMedias} 
-                            cameras={props.cameras}
-                            selectedStatType={selectedStatType}
+                    <div class="absolute top-1.5 right-1.5 z-20">
+                        <ArkSelect
+                            items={statTypeOptions()}
+                            value={selectedStatType}
+                            onValueChange={(details) => setSelectedStatType(details.value[0] || 'motion_energy')}
+                            placeholder="Select stat type"
                         />
-                    </Show>
+                    </div>
+                    <StatsCanvas 
+                        viewedMedias={props.viewedMedias} 
+                        cameras={props.cameras}
+                        selectedStatType={selectedStatType}
+                    />
                 </div>
             </Tooltip.Trigger>
             <Tooltip.Positioner>

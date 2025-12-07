@@ -27,12 +27,12 @@ export const agentsPostHandler = async (req: Request) => {
     logger.info(`Creating new agent via API: ${name} (${id}) with instruction: ${instruction}`);
 
     const rb = createRequestBuilder();
-    const template = (t: string) => `Given an instruction to monitor video cameras, you return a list of explicit things to look for, and things to ignore. Instruction: ${t}`
+    const template = (t: string) => `Given an instruction to monitor video cameras, you return a list of 3 explicit unique things to look for, and to ignore. Instruction: ${t}`
     const job_output_promise = rb.add_job<WorkerInput__Llm, WorkerOutput__Llm>("llm_fast", {
         messages: [
             {
                 "role": "system",
-                "content": "You are a helpful coding assistant. Answer in valid JSON format with a list objects for detection and a list of metrics. Each metric has keys \"entailment\" and \"contradiction\"."
+                "content": "You are a helpful coding assistant. Answer in valid JSON format with a list of 3-5 physical items for detection and a list of metrics. Each metric has keys \"entailment\" and \"contradiction\"."
             },
             {
                 "role": "user",
@@ -41,32 +41,20 @@ export const agentsPostHandler = async (req: Request) => {
             {
                 "role": "assistant",
                 "content": JSON.stringify({
-                    "objects": ["person", "worker", "helmet", "safety vest", "edge", "ground", "height"],
+                    "objects": ["worker", "helmet", "safety vest", "edge", "height"],
                     "metrics": [
                         {
                             "entailment": "Person lying on the ground after a fall.",
                             "contradiction": "Person kneeling or sitting normally."
                         },
                         {
-                            "entailment": "Sudden collapse or loss of balance.",
-                            "contradiction": "Controlled sitting or intentional crouching."
-                        },
-                        {
-                            "entailment": "Person standing near an unprotected edge.",
+                            "entailment": "Workers in a 1-2m drop zone.",
                             "contradiction": "Person on a flat, safe surface."
                         },
                         {
-                            "entailment": "Workers in a 1-2m drop zone.",
-                            "contradiction": "Workers inside a secured ground-level area."
+                            "entailment": "Person standing on top of a high ledge without safety gear.",
+                            "contradiction": "Person standing on the ground or wearing safety gear."
                         },
-                        {
-                            "entailment": "Person lying motionless while others approach.",
-                            "contradiction": "Person lying in a rest area."
-                        },
-                        {
-                            "entailment": "Worker missing required safety gear (helmet, vest).",
-                            "contradiction": "Worker wearing all required PPE."
-                        }
                     ]
                 })
             },

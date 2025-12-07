@@ -6,12 +6,14 @@ import { FiSettings } from "solid-icons/fi";
 
 interface ConfigureViewDialogProps {
     showDetections: Accessor<boolean>;
-    onSave: (settings: { showDetections: boolean }) => void;
+    showStatsBar: Accessor<boolean>;
+    onSave: (settings: { showDetections: boolean; showStatsBar: boolean }) => void;
     disabled?: boolean;
 }
 
 export default function ConfigureViewDialog(props: ConfigureViewDialogProps) {
     const [localShowDetections, setLocalShowDetections] = createSignal<boolean>(props.showDetections());
+    const [localShowStatsBar, setLocalShowStatsBar] = createSignal<boolean>(props.showStatsBar());
 
     // Sync local state when prop changes (e.g. when dialog opens/re-renders if parent changes)
     createEffect(() => {
@@ -19,8 +21,13 @@ export default function ConfigureViewDialog(props: ConfigureViewDialogProps) {
         setLocalShowDetections(sd);
     });
 
+    createEffect(() => {
+        const ssb = props.showStatsBar();
+        setLocalShowStatsBar(ssb);
+    });
+
     const handleSave = (setOpen: (open: boolean) => void) => {
-        props.onSave({ showDetections: localShowDetections() });
+        props.onSave({ showDetections: localShowDetections(), showStatsBar: localShowStatsBar() });
         setOpen(false);
     };
 
@@ -44,6 +51,12 @@ export default function ConfigureViewDialog(props: ConfigureViewDialogProps) {
                         label="Show Detection Masks"
                         checked={localShowDetections}
                         onCheckedChange={(e) => setLocalShowDetections(e.checked)}
+                    />
+
+                    <ArkSwitch
+                        label="Show Stats Bar"
+                        checked={localShowStatsBar}
+                        onCheckedChange={(e) => setLocalShowStatsBar(e.checked)}
                     />
 
                     <div class="flex justify-end pt-4">

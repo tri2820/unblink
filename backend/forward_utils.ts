@@ -6,13 +6,17 @@ import type {
 } from "~/shared";
 import type { ServerEphemeralState } from "../index";
 import {
+  type WorkerInput__Caption,
   type WorkerInput__Embedding,
   type WorkerInput__MotionEnergy,
   type WorkerInput__Segmentation,
+  type WorkerInput__StreamingVlm,
   type WorkerInput__Vlm,
+  type WorkerOutput__Caption,
   type WorkerOutput__Embedding,
   type WorkerOutput__MotionEnergy,
   type WorkerOutput__Segmentation,
+  type WorkerOutput__StreamingVlm,
   type WorkerOutput__Vlm,
   type WorkerType,
 } from "~/shared/engine";
@@ -30,15 +34,15 @@ import {
 } from "./database/utils";
 import type { ForwardingOpts } from "./forward";
 import { logger } from "./logger";
-import { calculateFrameStats, type MomentData } from "./utils/frame_stats";
+import { calculateFrameStats, checkMoment, type MomentData } from "./utils/frame_stats";
 import { handleMoment } from "./utils/handle_moment";
-import { cosineSimilarity, embeddingToArray } from "./utils/math";
+import { cosineSimilarity, embeddingToArray, softmax } from "./utils/math";
 import { set_moment_state } from "./worker_connect/worker_stream_connector";
 
 export type Builder = {
   worker_types: WorkerType[];
   interval: number;
-  should_run: (props: { in_moment: boolean; last_time_run: number }) => boolean;
+  should_run: (props: { in_moment: boolean; last_time_run: number; media_unit_id: string; media_id: string; data: Uint8Array }) => boolean;
   write?: (
     media_id: string,
     media_unit_id: string,
@@ -49,6 +53,7 @@ export type Builder = {
     worker_type: WorkerType;
     media_id: string;
     media_unit_id: string;
+    data: Uint8Array;
   }) => void | Promise<void>;
 };
 
@@ -58,13 +63,13 @@ export const create_builders: (opts: ForwardingOpts) => {
 } = (opts) => {
   return {
     indexing: {
-      worker_types: ["vlm"],
-      interval: 3000,
+      worker_types: ["caption"],
+      interval: 10000,
       should_run({ in_moment, last_time_run }) {
         if (in_moment) return true;
         const now = Date.now();
 
-        // Ocassionally run every minute
+        // Occasionally run every minute
         return now - last_time_run > 60000;
       },
       async write(media_id: string, media_unit_id: string, data: Uint8Array) {
@@ -85,7 +90,7 @@ export const create_builders: (opts: ForwardingOpts) => {
       },
 
       async build({ reqBuilder, worker_type, media_id, media_unit_id }) {
-        if (worker_type == "vlm") {
+        if (worker_type == "caption") {
           // Helper to clean up response text
           const cleanResponse = (text: string): string => {
             const prefixes = [
@@ -114,46 +119,17 @@ export const create_builders: (opts: ForwardingOpts) => {
             return text;
           };
 
-          // Helper to create VLM job
-          const createVlmJob = (instruction: string) => {
-            return reqBuilder.add_job<WorkerInput__Vlm, WorkerOutput__Vlm>(
-              worker_type,
-              {
-                messages: [
-                  {
-                    role: "system",
-                    content: [
-                      {
-                        type: "text",
-                        text: "You are an AI assistant that provides detailed descriptions of images. Answer user question by examining each image carefully.",
-                      },
-                    ],
-                  },
-                  {
-                    role: "user",
-                    content: [{ type: "text", text: instruction }],
-                  },
-                  {
-                    role: "assistant",
-                    content: [
-                      {
-                        type: "image",
-                        image: { __type: "resource-ref", id: media_unit_id },
-                      },
-                    ],
-                  },
-                ],
-              }
-            );
-          };
+          logger.info({ media_unit_id }, 'indexing: Creating caption jobs');
 
-          logger.info({ media_unit_id }, 'indexing: Creating VLM jobs');
-
-          // 1. General description job (always runs, updates media_unit.description)
-          const descriptionJob = createVlmJob(
-            "Provide a concise description of the content of this image in a few words."
+          // 1. Generic summarizing job (updates media_unit.description)
+          const descriptionJob = reqBuilder.add_job<WorkerInput__Caption, WorkerOutput__Caption>(
+            worker_type,
+            {
+              images: [{ __type: "resource-ref", id: media_unit_id }],
+              query: "Provide a concise description of the content of this image in a few words.",
+            }
           );
-          
+
           descriptionJob.then(async (output) => {
             const description = cleanResponse(output.response);
 
@@ -190,69 +166,132 @@ export const create_builders: (opts: ForwardingOpts) => {
             // Update media unit in database
             updateMediaUnit(media_unit_id, { description });
           });
+
+          // 2. Agent-specific jobs (N jobs, one per agent)
+          const agents = await getAllAgents();
+          
+          for (const agent of agents) {
+            const agentJob = reqBuilder.add_job<WorkerInput__Caption, WorkerOutput__Caption>(
+              worker_type,
+              {
+                images: [{ __type: "resource-ref", id: media_unit_id }],
+                query: agent.instruction,
+              }
+            );
+
+            agentJob.then(async (output) => {
+              const content = cleanResponse(output.response);
+
+              const mu = await getMediaUnitById(media_unit_id);
+              if (!mu) {
+                logger.error(
+                  `MediaUnit not found for media_unit_id ${media_unit_id}`
+                );
+                return;
+              }
+
+              // Create agent response in database
+              await createAgentResponse({
+                id: crypto.randomUUID(),
+                agent_id: agent.id,
+                media_unit_id: mu.id,
+                content: content,
+                created_at: Date.now(),
+              });
+
+              logger.info(
+                { agent_id: agent.id, media_unit_id: mu.id },
+                'indexing: Created agent response'
+              );
+
+              // Forward to clients
+              const msg: ServerToClientMessage = {
+                type: "agent_card",
+                id: crypto.randomUUID(),
+                content: content,
+                media_id: mu.media_id,
+                media_unit_id: mu.id,
+                at_time: mu.at_time,
+                agent_id: agent.id,
+              };
+              for (const [id, client] of opts.clients.entries()) {
+                client.send(msg);
+              }
+
+              // Forward to webhook
+              opts.forward_to_webhook({
+                event: "agent_response",
+                created_at: new Date().toISOString(),
+                agent_id: agent.id,
+                media_unit_id: mu.id,
+                media_id: mu.media_id,
+                content: content,
+              });
+            });
+          }
         }
       },
     },
-    // segmentation: {
-    //   worker_types: ["segmentation"],
-    //   interval: 3000,
-    //   should_run({ in_moment }) {
-    //     return true;
-    //   },
+    segmentation: {
+      worker_types: ["segmentation"],
+      interval: 3000,
+      should_run({ in_moment }) {
+        return true;
+      },
 
-    //   build({ reqBuilder, worker_type, media_id, media_unit_id }) {
-    //     reqBuilder
-    //       .add_job<WorkerInput__Segmentation, WorkerOutput__Segmentation>(
-    //         worker_type,
-    //         {
-    //           cross_job_id: media_id,
-    //           current_frame: {
-    //             __type: "resource-ref",
-    //             id: media_unit_id,
-    //           },
-    //           prompts: ["person", "vehicle", "animal"], // Default prompts, can be configured
-    //         }
-    //       )
-    //       .then(async (output) => {
-    //         // Check if output has error
-    //         if ('error' in output) {
-    //           logger.error(`Segmentation error for ${media_id}: ${output.error}`);
-    //           return;
-    //         }
+      build({ reqBuilder, worker_type, media_id, media_unit_id }) {
+        reqBuilder
+          .add_job<WorkerInput__Segmentation, WorkerOutput__Segmentation>(
+            worker_type,
+            {
+              cross_job_id: media_id,
+              current_frame: {
+                __type: "resource-ref",
+                id: media_unit_id,
+              },
+              prompts: ["person", "vehicle", "animal"], // Default prompts, can be configured
+            }
+          )
+          .then(async (output) => {
+            // Check if output has error
+            if ('error' in output) {
+              logger.error(`Segmentation error for ${media_id}: ${output.error}`);
+              return;
+            }
 
-    //         const prompts = ["person", "vehicle", "animal"]; // Should match the prompts sent to the worker
-    //         const msg: SegmentationMessage = {
-    //           type: "segmentation",
-    //           media_id,
-    //           media_unit_id,
-    //           frame_count: output.frame_count,
-    //           objects: output.objects,
-    //           scores: output.scores,
-    //           boxes: output.boxes,
-    //           masks: output.masks,
-    //           classes: prompts,
-    //           labels: output.labels,
-    //         };
-            
-    //         opts.forward_to_webhook({
-    //           ...msg,
-    //           created_at: new Date().toISOString(),
-    //         });
+            const prompts = ["person", "vehicle", "animal"]; // Should match the prompts sent to the worker
+            const msg: SegmentationMessage = {
+              type: "segmentation",
+              media_id,
+              media_unit_id,
+              frame_count: output.frame_count,
+              objects: output.objects,
+              scores: output.scores,
+              boxes: output.boxes,
+              masks: output.masks,
+              classes: prompts,
+              labels: output.labels,
+            };
 
-    //         // Forward to clients
-    //         for (const [, client] of opts.clients.entries()) {
-    //           client.send(msg);
-    //         }
-    //       });
-    //   },
-    // },
+            opts.forward_to_webhook({
+              ...msg,
+              created_at: new Date().toISOString(),
+            });
+
+            // Forward to clients
+            for (const [, client] of opts.clients.entries()) {
+              client.send(msg);
+            }
+          });
+      },
+    },
     motion_energy: {
       worker_types: ["motion_energy"],
       interval: 1000,
-      should_run() {
+      should_run({ in_moment, last_time_run, media_unit_id, media_id, data }) {
         return true;
       },
-      build({ reqBuilder, worker_type, media_id, media_unit_id }) {
+      async build({ reqBuilder, worker_type, media_id, media_unit_id, data }) {
         reqBuilder
           .add_job<WorkerInput__MotionEnergy, WorkerOutput__MotionEnergy>(
             worker_type,
@@ -282,15 +321,30 @@ export const create_builders: (opts: ForwardingOpts) => {
             }
 
             // Calculate frame stats with moment detection
-            const frameStats = calculateFrameStats(
-              state.stream_stats_map,
+            const stats: Record<string, number> = { motion_energy: output.motion_energy };
+
+            // Include agent scores in stats
+            const mediaAgentScores = state.agent_scores.get(media_id);
+            if (mediaAgentScores) {
+              for (const [agentId, agentScore] of mediaAgentScores) {
+                stats[`agent_${agentId}`] = agentScore;
+              }
+            }
+
+            const frameStats = calculateFrameStats({
+              streamStatsMap: state.stream_stats_map,
               media_id,
-              media_unit_id,
-              output.motion_energy,
-              Date.now(),
+              stats
+            });
+
+            // Check for moment detection
+            checkMoment({
+              streamStatsMap: state.stream_stats_map,
+              media_id,
+              frame_id: media_unit_id,
+              timestamp: Date.now(),
               onMoment,
-              // onMaybeMomentStart
-              () => {
+              onMaybeMomentStart: () => {
                 // Generate moment ID upfront and store in state
                 const newMomentId = crypto.randomUUID();
                 state.current_moment_ids.set(media_id, newMomentId);
@@ -307,8 +361,7 @@ export const create_builders: (opts: ForwardingOpts) => {
                   current_moment_id: newMomentId,
                 });
               },
-              // onMaybeMomentEnd
-              (isMoment) => {
+              onMaybeMomentEnd: (isMoment) => {
                 logger.info(
                   `Maybe moment ended for ${media_id}. Was moment: ${isMoment}`
                 );
@@ -325,16 +378,14 @@ export const create_builders: (opts: ForwardingOpts) => {
                 // Clear the moment ID from state after use
                 state.current_moment_ids.delete(media_id);
               }
-            );
+            });
 
             // Create frame_stats message
             const statsMessage: FrameStatsMessage = {
               type: "frame_stats" as const,
               media_id,
               frame_id: media_unit_id,
-              motion_energy: frameStats.motion_energy,
-              sma10: frameStats.sma10,
-              sma100: frameStats.sma100,
+              stats: frameStats,
               timestamp: Date.now(),
             };
 
@@ -350,81 +401,77 @@ export const create_builders: (opts: ForwardingOpts) => {
           });
       },
     },
-    embedding: {
-      worker_types: ["embedding"],
-      interval: 1000,
-      should_run() {
-        return true;
-      },
-      build({ reqBuilder, worker_type, media_id, media_unit_id }) {
-        reqBuilder
-          .add_job<WorkerInput__Embedding, WorkerOutput__Embedding>(
-            worker_type,
-            {
-              instruction: "Understand the content of this video stream.",
-              image: {
-                __type: "resource-ref",
-                id: media_unit_id,
-              }
-            }
-          )
-          .then(async (output) => {
-              await createEmbedding({
-                id: crypto.randomUUID(),
-                value: output.embedding,
-                type: 'frame_embedding',
-                ref_key: { media_unit_id, media_id },
-              });
+    // streaming_vlm: {
+    //   worker_types: ["streaming_vlm"],
+    //   interval: 1000,
+    //   should_run({ in_moment, last_time_run, media_unit_id, media_id, data }) {
+    //     const state = opts.state();
+    //     let frames = state.streaming_vlm_state.get(media_id) || [];
+        
+    //     // Always accumulate frames
+    //     frames.push({ id: media_unit_id, data, timestamp: Date.now() });
+    //     state.streaming_vlm_state.set(media_id, frames);
+        
+    //     // Run when we have at least 2 frames
+    //     return frames.length >= 2;
+    //   },
+    //   async build({ reqBuilder, worker_type, media_id, media_unit_id, data }) {
+    //     const state = opts.state();
+    //     const startTime = state.stream_start_times.get(media_id);
+    //     if (!startTime) {
+    //       logger.warn(`No start time found for media_id ${media_id}, skipping streaming_vlm`);
+    //       return;
+    //     }
 
-              // For each agent > metrics > 2 embeddings (entailment & contradiction)
-              // Calculate similarity with both embeddings
-              // Calculate metric_score = entailment_similarity - contradiction_similarity
-              const agents = await getAllAgents();
-              
-              for (const agent of agents) {
-                if (!agent.metric_ids || agent.metric_ids.length === 0) {
-                  continue;
-                }
-                
-                const metrics = await getMetricsByIds(agent.metric_ids);
-                
-                for (const metric of metrics) {
-                  // Get entailment and contradiction embeddings
-                  const entailmentEmbedding = await getEmbeddingByRefAndType(metric.id, 'metric_entailment');
-                  const contradictionEmbedding = await getEmbeddingByRefAndType(metric.id, 'metric_contradiction');
-                  
-                  if (!entailmentEmbedding || !contradictionEmbedding) {
-                    console.warn(`Missing embeddings for metric ${metric.id}`);
-                    continue;
-                  }
-                  
+    //     const frames = state.streaming_vlm_state.get(media_id) || [];
+    //     state.streaming_vlm_state.set(media_id, []); // clear immediately to avoid race
 
-                  // Calculate similarities
-                  const entailmentSimilarity = cosineSimilarity(
-                    output.embedding, 
-                    entailmentEmbedding.value
-                  );
-                  
-                  const contradictionSimilarity = cosineSimilarity(
-                    output.embedding,
-                    contradictionEmbedding.value
-                  );
-                  
-                  const metricScore = entailmentSimilarity - contradictionSimilarity;
+    //     // Add resources for old accumulated frames
+    //     for (const frame of frames) {
+    //       reqBuilder.add_resource({
+    //         id: frame.id,
+    //         type: 'image',
+    //         data: frame.data
+    //       });
+    //     }
 
+    //     // Calculate duration from first to last frame
+    //     const firstFrameTime = frames[0]?.timestamp ?? Date.now();
+    //     const lastFrameTime = frames[frames.length - 1]?.timestamp ?? Date.now();
+    //     const duration_sec = Math.max(1, Math.round((lastFrameTime - firstFrameTime) / 1000));
 
-                  console.log(`Calculated similarities for agent ${agent.id} and metric ${metric.id}`, {
-                    metricScore,
-                    entailmentSimilarity,
-                    contradictionSimilarity,
-                  });
-                  
-                  // TODO: Store the metric score - could create agent response or separate metric_scores table
-                }
-              }
-          } );
-      },
-    },
+    //     const input : WorkerInput__StreamingVlm = {
+    //       frames: frames.map(f => ({
+    //         __type: "resource-ref",
+    //         id: f.id,
+    //       })),
+    //       // TODO: media_id + agent_id
+    //       stream_id: media_id,
+    //       // Duration in seconds between first and last frame
+    //       duration_sec: duration_sec,
+    //       // Second
+    //       timestamp_sec: Math.round((Date.now() - startTime) / 1000),
+    //       query: 'Commentate on real-time events in this construction video. Pay attention to worker safety violations & fall hazards.',
+    //     };
+
+    //     // const resource_ids = reqBuilder.req.resources?.map(r => r.id) || [];
+    //     // const job_frame_refs = input.frames.map(f => f.id);
+    //     // logger.info({ 
+    //     //   media_id, 
+    //     //   resource_ids,
+    //     //   job_frame_refs,
+    //     //   resources_count: resource_ids.length,
+    //     //   jobs_count: reqBuilder.req.jobs?.length 
+    //     // }, 'streaming_vlm build: REQUEST STATE');
+
+    //     const job = reqBuilder.add_job<WorkerInput__StreamingVlm, WorkerOutput__StreamingVlm>(
+    //       worker_type, input);
+
+    //     job.then((output) => {
+    //       logger.info({ media_id, response: output.response }, 'streaming_vlm output');
+    //     });
+    //   }
+    // }
   };
 };
 
