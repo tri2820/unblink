@@ -169,7 +169,7 @@ export const create_builders: (opts: ForwardingOpts) => {
 
           // 2. Agent-specific jobs (N jobs, one per agent)
           const agents = await getAllAgents();
-          
+
           for (const agent of agents) {
             const agentJob = reqBuilder.add_job<WorkerInput__Caption, WorkerOutput__Caption>(
               worker_type,
@@ -407,11 +407,11 @@ export const create_builders: (opts: ForwardingOpts) => {
     //   should_run({ in_moment, last_time_run, media_unit_id, media_id, data }) {
     //     const state = opts.state();
     //     let frames = state.streaming_vlm_state.get(media_id) || [];
-        
+
     //     // Always accumulate frames
     //     frames.push({ id: media_unit_id, data, timestamp: Date.now() });
     //     state.streaming_vlm_state.set(media_id, frames);
-        
+
     //     // Run when we have at least 2 frames
     //     return frames.length >= 2;
     //   },
