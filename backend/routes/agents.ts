@@ -27,33 +27,89 @@ export const agentsPostHandler = async (req: Request) => {
     logger.info(`Creating new agent via API: ${name} (${id}) with instruction: ${instruction}`);
 
     const rb = createRequestBuilder();
-    const template = (t: string) => `Given an instruction to monitor video cameras, you return a list of 3 explicit unique things to look for, and to ignore. Instruction: ${t}`
+    const template = (t: string) => `Given an instruction to monitor video cameras in a manufacturing environment, you return a list of 3-5 explicit unique physical objects to look for. Instruction: ${t}`
     const job_output_promise = rb.add_job<WorkerInput__Llm, WorkerOutput__Llm>("llm_fast", {
         messages: [
             {
                 "role": "system",
-                "content": "You are a helpful coding assistant. Answer in valid JSON format with a list of 3-5 physical items for detection and a list of metrics. Each metric has keys \"entailment\" and \"contradiction\"."
+                "content": "You are a helpful assistant specialized in manufacturing production monitoring. Answer in valid JSON format with a list of 3-5 physical items for detection and a list of metrics. Each metric has keys \"entailment\" and \"contradiction\"."
             },
             {
                 "role": "user",
-                "content": template("Was there an incident? Check if anyone has fallen to ensure worker safety. Is there a potentially dangerous situation (people near edges, not wearing safety gear, etc)?")
+                "content": template("Monitor automotive assembly line to detect when car parts or components stop moving on the production line, indicating a jam or production downtime.")
             },
             {
                 "role": "assistant",
                 "content": JSON.stringify({
-                    "objects": ["worker", "helmet", "safety vest", "edge", "height"],
+                    "objects": ["car body", "component", "assembly line", "conveyor", "vehicle part"],
                     "metrics": [
                         {
-                            "entailment": "Person lying on the ground after a fall.",
-                            "contradiction": "Person kneeling or sitting normally."
+                            "entailment": "Car parts stationary on assembly line for more than 10 seconds.",
+                            "contradiction": "Car parts moving continuously through assembly stations."
                         },
                         {
-                            "entailment": "Workers in a 1-2m drop zone.",
-                            "contradiction": "Person on a flat, safe surface."
+                            "entailment": "Production line stopped with vehicles backed up at multiple stations.",
+                            "contradiction": "Vehicles flowing smoothly between assembly stations."
+                        },
+                    ]
+                })
+            },
+            {
+                "role": "user",
+                "content": template("Monitor mask production line to detect when masks stop flowing or pile up on the conveyor, and check for quality issues like misaligned ear loops or defective masks.")
+            },
+            {
+                "role": "assistant",
+                "content": JSON.stringify({
+                    "objects": ["mask", "ear loop", "conveyor belt", "mask stack", "production machine"],
+                    "metrics": [
+                        {
+                            "entailment": "Masks piled up or jammed on the production line.",
+                            "contradiction": "Masks flowing evenly and separated on conveyor."
                         },
                         {
-                            "entailment": "Person standing on top of a high ledge without safety gear.",
-                            "contradiction": "Person standing on the ground or wearing safety gear."
+                            "entailment": "Mask with missing, broken, or misaligned ear loops.",
+                            "contradiction": "Mask with properly attached ear loops on both sides."
+                        },
+                    ]
+                })
+            },
+            {
+                "role": "user",
+                "content": template("Monitor steel manufacturing to detect when workers are too close to hot materials, welding operations, or heavy equipment without proper safety distance.")
+            },
+            {
+                "role": "assistant",
+                "content": JSON.stringify({
+                    "objects": ["worker", "steel beam", "welding arc", "crane", "hot material", "protective barrier"],
+                    "metrics": [
+                        {
+                            "entailment": "Worker within 2 meters of welding operation or hot steel without barriers.",
+                            "contradiction": "Worker maintaining safe distance from welding and hot materials."
+                        },
+                        {
+                            "entailment": "Person standing in the path of overhead crane or moving steel beams.",
+                            "contradiction": "All personnel clear of crane operation zones and moving materials."
+                        },
+                    ]
+                })
+            },
+            {
+                "role": "user",
+                "content": template("Monitor medical mask machine to detect when the machine stops producing masks or when finished mask bins are nearly full.")
+            },
+            {
+                "role": "assistant",
+                "content": JSON.stringify({
+                    "objects": ["mask machine", "finished mask", "collection bin", "production counter", "machine arm"],
+                    "metrics": [
+                        {
+                            "entailment": "Mask machine idle with no masks being produced for over 15 seconds.",
+                            "contradiction": "Machine actively producing masks at regular intervals."
+                        },
+                        {
+                            "entailment": "Collection bin filled to 90% capacity or masks overflowing.",
+                            "contradiction": "Collection bin less than 75% full with adequate space."
                         },
                     ]
                 })

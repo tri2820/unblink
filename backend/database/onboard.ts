@@ -3,29 +3,25 @@ import { executeREST } from './rest';
 
 export async function onboardMedia(db: Database) {
     const entries = [
-        // {
-        //     name: "St. Catherine's School",
-        //     // uri: "https://bucket.zapdoslabs.com/st_catherine_school.mp4",
-        //     uri: "/home/tri/test_videos/st_catherine_school.mp4",
-        //     labels: ["Excavation"]
-        // },
         {
-            name: "St. Catherine's School",
-            // uri: "https://bucket.zapdoslabs.com/st_catherine_school.mp4",
-            uri: "/home/tri/test_videos/3.mp4",
-            labels: ["Excavation"]
+            name: "Car Factory",
+            uri: "https://bucket.zapdoslabs.com/car_factory.mp4",
+            labels: ["Automotive"]
         },
         {
-            name: "Home Construction Site",
-            // uri: "https://bucket.zapdoslabs.com/home.mp4",
-            uri: "/home/tri/test_videos/home_construction_site.mp4",
-            labels: ["Remodeling"]
+            name: "Mask Machine",
+            uri: "https://bucket.zapdoslabs.com/mask_machine.mp4",
+            labels: ["Medical"]
         },
         {
-            name: "National Museum",
-            // uri: "https://bucket.zapdoslabs.com/museum.mp4",
-            uri: "/home/tri/test_videos/national_museum.mp4",
-            labels: ["Remodeling"]
+            name: "Mask Production Line",
+            uri: "https://bucket.zapdoslabs.com/mask_production_line.mp4",
+            labels: ["Medical"]
+        },
+        {
+            name: "Steel Work Production",
+            uri: "https://bucket.zapdoslabs.com/steel_work_producion.mp4",
+            labels: ["Metal"]
         },
     ];
 

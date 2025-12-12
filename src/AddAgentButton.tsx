@@ -8,16 +8,16 @@ import AgentPlusSVG from '~/assets/icons/AgentPlus.svg';
 
 const AGENT_TEMPLATES = [
     {
-        name: 'Fall Detector',
-        instruction: 'Was there an incident? Check if anyone has fallen to ensure worker safety. Is there a potentially dangerous situation (people near edges, not wearing safety gear, etc)?',
+        name: 'Jam Detector',
+        instruction: 'Monitor production line to detect when products stop moving on the conveyor belt, indicating a jam or production downtime.',
     },
     {
-        name: 'Security Monitor',
-        instruction: 'Are there any suspicious activities or unauthorized persons in the area? Monitor for security concerns.',
+        name: 'Bin Full Monitor',
+        instruction: 'Monitor reject bins and finished goods bins to detect when they are nearly full or overflowing before overflow occurs.',
     },
     {
-        name: 'Safety Equipment',
-        instruction: 'Are all personnel wearing required safety equipment (helmets, vests, etc.)? Check for compliance.',
+        name: 'Defect Detector',
+        instruction: 'Detect quality issues by spotting obvious deformities, defects, or irregularities on products at inspection points.',
     },
 ];
 
