@@ -10,7 +10,7 @@ async function ensureDirExists(dir: string) {
 }
 
 export const appdir = () => process.env.APPDATA || (process.platform == 'darwin' ? process.env.HOME + '/Library/Preferences' : process.env.HOME + "/.local/share")
-export const APP_NAME = "unblink";
+export const APP_NAME = "unblink-manufacturing";
 export const RUNTIME_DIR = path.join(appdir(), APP_NAME);
 export const MODELS_DIR = path.join(RUNTIME_DIR, 'models');
 
